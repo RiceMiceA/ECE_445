@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
+import requests
 
 app = FastAPI()
 app.mount("/main", StaticFiles(directory="main", html=True), name="main")
@@ -29,6 +30,8 @@ system_state = {
     "containers": ["Container 1 Not Set", "Container 2 Not Set", "Container 3 Not Set"]
 }
 
+ESP_IP = "0.0.0.0"
+
 # --------- Post Endpoints (set variables/state in memory) ---------
 
 # Used by the Meta Quest 3 to post the recipe it has generated
@@ -49,6 +52,11 @@ def status_update(status: dict):
 def set_containers(config: ContainerConfig):
     system_state["containers"] = config.containers
     return {"message": "Container configuration updated"}
+
+@app.post("/spin_motor")
+def spin_motor():
+    r = requests.post(f"http://{ESP_IP}/spin")
+    return {"esp_response": r.text}
 
 # --------- Get Endpoints (get data from backend) ---------
 
