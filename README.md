@@ -1,12 +1,8 @@
 # ECE_445
 For Sp26 ECE445 Project - Griffin, Jackson, Tony
 
-
-
-
-## Managing the submodule Unity folder
-For pull and fetch from remote
-### Freshly Clone 1st time
+## 1. Init
+#### Freshly Clone 1st time
 ```bash
 git clone --recurse-submodules <repo-url>
 ```
@@ -16,12 +12,21 @@ This does everything:
 - initializes submodules
 - checks out the correct commits
 
-### Already cloned repo
+#### Already cloned repo
 ```bash
 git submodule update --init --recursive
 ```
 
-### Modification towards Submodule
+
+## 2. Managing the submodule Unity folder
+### 2.1 Before Work/Update
+#### In parent folder
+```bash
+git pull
+git submodule update --init --recursive
+```
+
+### 2.2 Post-work
 ```bash
 cd path/to/submodule
 git checkout main
@@ -31,7 +36,7 @@ git commit -m "Update submodule"
 git push origin main
 
 cd /path/to/parent-repo
-git add path/to/submodule
+git add Software/src/Unity-PassthroughCameraApiSamples
 git commit -m "Bump submodule"
 git push origin main
 ```
@@ -45,4 +50,7 @@ git submodule status
 ### Tip
 ```bash
 git config --global submodule.recurse true
+# if we wanna track the specific branch
+git submodule set-branch --branch tony Software/src/Unity-PassthroughCameraApiSamples
+git submodule update --remote
 ```
