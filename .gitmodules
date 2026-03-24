@@ -1,3 +1,4 @@
 [submodule "Software/src/Unity-PassthroughCameraApiSamples"]
 	path = Software/src/Unity-PassthroughCameraApiSamples
 	url = https://github.com/RiceMiceA/Unity-PassthroughCameraApiSamples.git
+	branch = tony
