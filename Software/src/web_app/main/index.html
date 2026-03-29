@@ -1,25 +1,122 @@
 <!DOCTYPE html>
-<html>
-    <head>
-        <Title>
-            NuChef AI Culinary Assistant + Spice Dispenser
-        </Title>
-        <link rel="stylesheet" href="style.css">
-    </head>
-    <body>
-        <h1>NuChef Culinary Assistant Spice Tracker</h1>
-        <h2>Configure Containers</h2>
-        <div id="container-set">
-            <input id="container1" placeholder="Container 1 Spice">
-            <input id="container2" placeholder="Container 2 Spice">
-            <input id="container3" placeholder="Container 3 Spice">
-            <button id="setBtn">Set Containers</button>
-        </div>
+<html lang="en">
 
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Cooking Assistant — Dashboard</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
 
-        <h3>Spice Container Levels</h3>
-        <div id="containers"></div>
+<body>
 
-        <script src="script.js"></script>
-    </body>
+    <header>
+        <h1>AI Cooking Assistant</h1>
+        <div id="state-badge" class="badge idle">IDLE</div>
+        <button id="btn-reset" class="btn danger">Reset</button>
+    </header>
+
+    <main>
+
+        <!-- ── Left column ─────────────────────────────────────────── -->
+        <section class="panel" id="panel-ingredients">
+            <h2>Ingredients</h2>
+
+            <div class="sub-panel">
+                <h3>Candidate (live)</h3>
+                <ul id="candidate-list">
+                    <li class="empty">None detected</li>
+                </ul>
+            </div>
+
+            <div class="sub-panel">
+                <h3>Confirm Ingredients</h3>
+                <textarea id="ingredient-input" rows="4" placeholder="chicken, garlic, olive oil"></textarea>
+                <button id="btn-confirm" class="btn primary">Confirm Ingredients</button>
+            </div>
+
+            <div class="sub-panel">
+                <h3>Confirmed</h3>
+                <ul id="confirmed-list">
+                    <li class="empty">None confirmed</li>
+                </ul>
+            </div>
+
+            <button id="btn-generate" class="btn secondary">Generate Recipe</button>
+        </section>
+
+        <!-- ── Center column ────────────────────────────────────────── -->
+        <section class="panel" id="panel-recipe">
+            <h2>Recipe</h2>
+            <p id="recipe-name" class="recipe-name">—</p>
+            <p id="recipe-desc" class="recipe-desc"></p>
+
+            <div id="steps-container">
+                <p class="empty">No recipe loaded</p>
+            </div>
+
+            <div class="step-controls">
+                <button id="btn-dispense" class="btn primary" disabled>Dispense</button>
+                <button id="btn-advance" class="btn secondary" disabled>Next Step →</button>
+            </div>
+        </section>
+
+        <!-- ── Right column ─────────────────────────────────────────── -->
+        <section class="panel" id="panel-hardware">
+            <h2>Hardware</h2>
+
+            <div class="sub-panel">
+                <h3>Containers</h3>
+                <div id="containers-info"></div>
+                <div class="container-edit">
+                    <input id="c0" placeholder="Container 0" />
+                    <input id="c1" placeholder="Container 1" />
+                    <input id="c2" placeholder="Container 2" />
+                    <button id="btn-set-containers" class="btn secondary">Update</button>
+                </div>
+            </div>
+
+            <div class="sub-panel">
+                <h3>Load Cell Weight</h3>
+                <div id="weight-display" class="weight">0.00 g</div>
+            </div>
+
+            <div class="sub-panel">
+                <h3>Dispense Status</h3>
+                <div id="dispense-status" class="status-chip idle">idle</div>
+            </div>
+
+            <div class="sub-panel">
+                <h3>Manual Override</h3>
+                <label class="toggle">
+                    <input type="checkbox" id="manual-toggle" />
+                    <span>Manual Mode</span>
+                </label>
+                <div id="manual-controls" class="hidden">
+                    <select id="manual-spice">
+                        <option value="salt">salt</option>
+                        <option value="black pepper">black pepper</option>
+                        <option value="garlic powder">garlic powder</option>
+                    </select>
+                    <input type="number" id="manual-grams" placeholder="grams" min="0.1" step="0.1" />
+                    <button id="btn-manual-dispense" class="btn primary">Dispense</button>
+                </div>
+            </div>
+
+            <div class="sub-panel">
+                <h3>Pending ESP32 Command</h3>
+                <pre id="pending-command">none</pre>
+            </div>
+        </section>
+
+    </main>
+
+    <footer>
+        <span id="poll-indicator">●</span> Polling backend every 2 s
+        &nbsp;|&nbsp; <span id="last-error" class="error-text"></span>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+
 </html>

@@ -1,0 +1,168 @@
+AI Nutritious Culinary Assistant — Cursor Context
+
+====================
+PROJECT OVERVIEW
+====================
+We are building an AI-powered mixed-reality cooking assistant using Meta Quest 3.
+The system detects ingredients in real time, generates recipes, guides the user step-by-step in AR,
+and controls a 3-container seasoning dispenser with precise gram outputs.
+
+Core idea:
+Perception (Vision) + Planning (Backend) + Action (Hardware)
+
+====================
+CORE COMPONENTS
+====================
+
+1. QUEST 3 (Unity Frontend)
+- Captures camera frames
+- Runs YOLO model via Unity Sentis
+- Displays bounding boxes in AR
+- Lets user confirm ingredients
+- Displays cooking instructions
+
+Key scripts:
+- SentisInferenceRunManager → runs model
+- SentisInferenceUiManager → draws boxes
+- DetectionManager → handles markers + interaction
+- InputManager → button / gesture input
+- DetectionUiMenuManager → UI state
+
+--------------------
+
+2. BACKEND (FastAPI)
+- Central brain of the system
+- Manages state machine
+- Generates recipes
+- Controls cooking steps
+- Sends dispense commands
+
+Current file:
+- backend.py
+
+Key idea:
+Backend = source of truth
+
+--------------------
+
+3. SEASONING SYSTEM (ESP32 + Motors)
+- 3 fixed spice containers
+- Dispenses grams using motors
+- Load cell provides feedback
+- Closed-loop control
+
+Example spices:
+- salt
+- black pepper
+- garlic powder
+
+====================
+STATE MACHINE
+====================
+
+IDLE
+→ SCANNING
+→ INGREDIENTS_CONFIRMED
+→ RECIPE_READY
+→ DISPENSING_STEP
+→ USER_COOK_STEP
+→ COMPLETE
+
+Global states:
+- ERROR
+- MANUAL_OVERRIDE
+
+====================
+SYSTEM STATE (TARGET)
+====================
+
+system_state = {
+    "demo_state": "idle",
+    "candidate_ingredients": [],
+    "confirmed_ingredients": [],
+    "recipe": None,
+    "current_step_index": -1,
+    "containers": ["salt", "black pepper", "garlic powder"],
+    "container_levels": [0, 0, 0],
+    "weight": 0.0,
+    "dispense_status": "idle",
+    "manual_override": False,
+    "last_error": None
+}
+
+====================
+DATA FLOW
+====================
+
+Quest → Backend:
+- confirmed ingredients
+
+Backend:
+- generate recipe
+- track step progression
+- compute spice amounts
+
+Backend → ESP32:
+- dispense commands (grams)
+
+ESP32 → Backend:
+- weight feedback
+
+Backend → Quest:
+- current step instructions
+
+====================
+IMPORTANT DESIGN RULES
+====================
+
+1. Quest handles perception only
+2. Backend handles logic and planning
+3. Hardware only executes commands
+4. Keep spice set FIXED to 3
+5. Use consistent spice naming everywhere
+
+====================
+NEXT DEVELOPMENT TASKS
+====================
+
+1. Ingredient confirmation API
+   POST /ingredients_confirmed
+
+2. Recipe generation API
+   POST /generate_recipe
+
+3. Step system
+   GET /current_step
+   POST /advance_step
+
+4. Dispense system
+   POST /dispense_step
+
+5. Calibration
+   grams → motor steps
+
+====================
+DO NOT BREAK THESE
+====================
+
+- Detection pipeline in Unity already works
+- DetectionManager does NOT run inference
+- Backend must become the orchestrator
+- Keep 3-container constraint
+- Keep state machine structure
+
+====================
+SUCCESS CRITERIA
+====================
+
+- Real-time detection (~10 FPS)
+- ≥85% ingredient detection accuracy
+- Gram-level dispensing accuracy
+- End-to-end demo:
+  detect → plan → guide → dispense
+
+====================
+SHORT DESCRIPTION
+====================
+
+AI cooking assistant combining AR vision, backend planning, and robotic seasoning control.
