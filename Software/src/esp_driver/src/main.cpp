@@ -26,7 +26,7 @@ const char *PASSWORD = "houserules";
 // ── Backend ───────────────────────────────────────────────────────────────────
 // UPDATE this to the machine running backend.py (uvicorn --host 0.0.0.0)
 
-const char *BACKEND = "http://192.168.1.100:8000";
+const char *BACKEND = "http://192.168.4.28:8000";
 const unsigned long POLL_MS = 1000;      // ms between /pending_command polls
 const unsigned long HEARTBEAT_MS = 2000; // ms between /status_update posts
 
