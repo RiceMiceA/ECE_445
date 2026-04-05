@@ -58,7 +58,18 @@ git submodule update --remote
 
 
 ## 3. Network Configuration
+
+### Kill previous run
+```bash
+kill $(lsof -t -i:8000) 
+```
+
+### Update IP Address before operation
+```bash
+Check the current ip address: 
+```
 When switching networks, update the backend IP (`192.168.x.x`) in these files:
+
 
 | File | Line | Variable |
 |------|------|----------|
@@ -68,6 +79,9 @@ When switching networks, update the backend IP (`192.168.x.x`) in these files:
 
 Then start the backend on all interfaces:
 ```bash
+export OPENAI_API_KEY="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"
+export OPENAI_MODEL="gpt-5.4"
+export USE_LLM_PLANNER=1
 uvicorn backend:app --host 0.0.0.0 --port 8000 --reload
 ```
 

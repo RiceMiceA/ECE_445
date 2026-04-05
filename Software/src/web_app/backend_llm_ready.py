@@ -7,7 +7,7 @@ Run:
     export OPENAI_API_KEY="..."
     export OPENAI_MODEL="your-validated-model"
     export USE_LLM_PLANNER=1
-    uvicorn backend:app --host 0.0.0.0 --port 8000 --reload
+    uvicorn backend_llm_ready:app --host 0.0.0.0 --port 8000 --reload
 """
 
 from __future__ import annotations
@@ -255,7 +255,6 @@ def _generate_mock_recipe(ingredients: list[str]) -> dict:
     }
 
 
-# LLM recipe planner
 class DispenseSpec(BaseModel):
     spice: Literal["salt", "black pepper", "garlic powder"]
     grams: float = Field(ge=0.2, le=4.0)
@@ -337,7 +336,7 @@ def _postprocess_recipe_plan(plan: RecipePlan, confirmed_ingredients: list[str])
     }
 
 
-# Actual calling openai api.
+
 def _generate_llm_recipe(ingredients: list[str]) -> dict:
     if not USE_LLM_PLANNER:
         system_state["last_planner_status"] = "llm_disabled_fallback_to_mock"

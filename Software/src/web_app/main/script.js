@@ -3,7 +3,8 @@
  * Talks to FastAPI backend at BACKEND_URL.
  */
 
-const BACKEND_URL = "http://localhost:8000";
+const BACKEND_URL = "http://192.168.197.86:8000";   // Triangle
+// const BACKEND_URL_ESP = "http://192.168.4.28:8000";    // 508 E John
 const POLL_MS = 2000;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
