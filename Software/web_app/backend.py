@@ -1,3 +1,5 @@
+# python -m uvicorn backend:app --reload
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
@@ -20,6 +22,10 @@ class Recipe(BaseModel):
     ingredients: list[str]
     spices: list[Spice]
 
+class SpinRequest(BaseModel):
+    ip: str
+
+
 # --------- Memory ---------
 
 system_state = {
@@ -29,8 +35,6 @@ system_state = {
     "dispensing": False,
     "containers": ["Container 1 Not Set", "Container 2 Not Set", "Container 3 Not Set"]
 }
-
-ESP_IP = "0.0.0.0"
 
 # --------- Post Endpoints (set variables/state in memory) ---------
 
@@ -54,9 +58,11 @@ def set_containers(config: ContainerConfig):
     return {"message": "Container configuration updated"}
 
 @app.post("/spin_motor")
-def spin_motor():
-    r = requests.post(f"http://{ESP_IP}/spin")
-    return {"esp_response": r.text}
+def spin_motor(req: SpinRequest):
+    esp_url = f"http://{req.ip}/spin"
+    r = requests.post(esp_url)
+    return {"status": "sent", "esp_response": r.text}
+
 
 # --------- Get Endpoints (get data from backend) ---------
 
@@ -98,9 +104,12 @@ def get_container_info():
 def grams_to_steps(int):
     return 0
 
+
+
 # --------- Testing JSONs ---------
 """
 http://127.0.0.1:8000/docs to get to the fastAPI backend testing page
+http://127.0.0.1:8000/main to get to the frontend
 
 {
   "recipe_name": "yummy",

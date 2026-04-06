@@ -51,20 +51,28 @@ async function loadContainers(){
     });
 }
 
+async function spinMotor(){
+    const ip = document.getElementById("IP_Input").value;
+    
+    const payload = {
+        ip: ip
+    };
+
+    const response = await fetch("/spin_motor", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+    console.log(data);
+}
+
 
 loadContainers();
 // Auto-refresh every 2 seconds
 setInterval(loadContainers, 2000);
-document.getElementById("setBtn").addEventListener("click", setContainers);
-
-
-// document.addEventListener("DOMContentLoaded", function () {
-
-//     loadContainers();
-//     setInterval(loadContainers, 2000);
-
-//     document.getElementById("setBtn")
-//         .addEventListener("click", setContainers);
-
-// });
-
+document.getElementById("setContainersBtn").addEventListener("click", setContainers);
+document.getElementById("spinMotor").addEventListener("click", spinMotor);
