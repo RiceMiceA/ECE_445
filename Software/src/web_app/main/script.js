@@ -3,7 +3,8 @@
  * Talks to FastAPI backend at BACKEND_URL.
  */
 
-const BACKEND_URL = "http://192.168.197.86:8000";   // Triangle
+const BACKEND_URL = window.location.origin;   // same origin as the UI
+// const BACKEND_URL = "http://192.168.197.86:8000";   // Triangle
 // const BACKEND_URL_ESP = "http://192.168.4.28:8000";    // 508 E John
 const POLL_MS = 2000;
 
@@ -96,7 +97,7 @@ function renderState(state) {
     const notComplete = state.demo_state !== "complete";
 
     document.getElementById("btn-dispense").disabled =
-        !isDispenseStep || state.demo_state === "dispensing_step";
+        !isDispenseStep || state.dispense_status === "dispensing";
     document.getElementById("btn-advance").disabled =
         !hasRecipe || !notComplete;
 }
