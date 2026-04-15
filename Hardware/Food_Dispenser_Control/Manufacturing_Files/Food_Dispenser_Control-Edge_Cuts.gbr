@@ -1,0 +1,23 @@
+%TF.GenerationSoftware,KiCad,Pcbnew,9.0.3*%
+%TF.CreationDate,2026-03-05T18:51:17-06:00*%
+%TF.ProjectId,Food_Dispenser_Control,466f6f64-5f44-4697-9370-656e7365725f,rev?*%
+%TF.SameCoordinates,Original*%
+%TF.FileFunction,Profile,NP*%
+%FSLAX46Y46*%
+G04 Gerber Fmt 4.6, Leading zero omitted, Abs format (unit mm)*
+G04 Created by KiCad (PCBNEW 9.0.3) date 2026-03-05 18:51:17*
+%MOMM*%
+%LPD*%
+G01*
+G04 APERTURE LIST*
+%TA.AperFunction,Profile*%
+%ADD10C,0.050000*%
+%TD*%
+G04 APERTURE END LIST*
+D10*
+X101000000Y-58000000D02*
+X201000000Y-58000000D01*
+X201000000Y-158000000D01*
+X101000000Y-158000000D01*
+X101000000Y-58000000D01*
+M02*

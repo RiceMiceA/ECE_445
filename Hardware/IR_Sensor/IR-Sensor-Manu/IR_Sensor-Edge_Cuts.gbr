@@ -1,0 +1,23 @@
+%TF.GenerationSoftware,KiCad,Pcbnew,9.0.3*%
+%TF.CreationDate,2026-03-26T18:49:19-05:00*%
+%TF.ProjectId,IR_Sensor,49525f53-656e-4736-9f72-2e6b69636164,rev?*%
+%TF.SameCoordinates,Original*%
+%TF.FileFunction,Profile,NP*%
+%FSLAX46Y46*%
+G04 Gerber Fmt 4.6, Leading zero omitted, Abs format (unit mm)*
+G04 Created by KiCad (PCBNEW 9.0.3) date 2026-03-26 18:49:19*
+%MOMM*%
+%LPD*%
+G01*
+G04 APERTURE LIST*
+%TA.AperFunction,Profile*%
+%ADD10C,0.050000*%
+%TD*%
+G04 APERTURE END LIST*
+D10*
+X74000000Y-86500000D02*
+X113000000Y-86500000D01*
+X113000000Y-135000000D01*
+X74000000Y-135000000D01*
+X74000000Y-86500000D01*
+M02*
