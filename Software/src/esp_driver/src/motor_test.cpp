@@ -77,12 +77,12 @@ void setup()
 
     // Enable TB6612 driver
     pinMode(ENABLE_R, OUTPUT);
-    digitalWrite(ENABLE_R, HIGH);
+    digitalWrite(ENABLE_R, LOW);
     pinMode(ENABLE_M, OUTPUT);
     digitalWrite(ENABLE_M, LOW);
     pinMode(ENABLE_L, OUTPUT);
-    digitalWrite(ENABLE_L, LOW);
-    Serial.println("ENABLE_R → HIGH");
+    digitalWrite(ENABLE_L, HIGH);
+    Serial.println("ENABLE_L → HIGH");
 
     // Stepper Motors Setup
     stepper.setMaxSpeed(800);

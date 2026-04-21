@@ -1,6 +1,6 @@
 // AI Nutritious Culinary Assistant — ESP32-S3 Dispenser Firmware (BLE)
 // TB6612 motor driver, FULL4WIRE steppers, BLE communication.
-// HX711 load cell on pins DOUT=19, SCK=20 for real-time weight.
+// HX711 load cell on pins DOUT=2, SCK=1 for real-time weight.
 //
 // BLE Protocol:
 //   Advertises as "NuChef-Dispenser" with a custom GATT service.
@@ -15,9 +15,11 @@
 //       → {"weight":0}
 //
 // Wiring summary  (TB6612 → ESP32-S3):
-//   Motor Right  (container 0) → AIN1=10, AIN2=11, BIN1=12, BIN2=13
-//   Motor Middle (container 1) → TODO: assign unique pins when wired
-//   Motor Left   (container 2) → TODO: assign unique pins when wired
+//   All three motors share the 4 coil-drive pins below.
+//   The active motor is selected by its ENABLE line.
+//   container_index 0 → Left motor
+//   container_index 1 → Middle motor
+//   container_index 2 → Right motor
 //
 // Calibration:
 //   STEPS_PER_GRAM — motor steps per gram dispensed (measure empirically)
@@ -42,10 +44,11 @@ const char *BLE_DEVICE_NAME = "NuChef-Dispenser";
 
 // ── Load cell (HX711) ──────────────────────────────────────────────────────────
 
-const int LOADCELL_DOUT_PIN = 4;
-const int LOADCELL_SCK_PIN  = 5;
+const int LOADCELL_DOUT_PIN = 2;
+const int LOADCELL_SCK_PIN  = 1;
 const float HX711_SCALE_FACTOR = 1250.0f;  // (raw reading) / actual grams — calibrate!
 const float WEIGHT_ZERO_THRESHOLD = 0.05f; // readings below this → 0
+const unsigned long HX711_READY_TIMEOUT_MS = 3000;
 
 HX711 scale;
 bool  scaleReady = false;   // set true only if tare succeeds
@@ -74,16 +77,9 @@ unsigned long lastHeartbeat = 0;
 bool dispensing = false;
 
 // ── Motors — TB6612 FULL4WIRE steppers ────────────────────────────────────────
-// container_index from backend maps directly to motors[index]
-//
-// Right motor (container 0) — the only one wired for now Breadboard
-// #define AIN1R 10
-// #define AIN2R 11
-// #define BIN1R 12
-// #define BIN2R 13
+// All three spice augers share the same 4 phase lines.
+// We select Left / Middle / Right with the dedicated enable pins.
 
-
-// Right motor (container 0) — the only one wired for now PCB
 #define AIN1R 21
 #define AIN2R 47
 #define BIN1R 45
@@ -93,16 +89,23 @@ bool dispensing = false;
 #define ENABLE_M 13
 #define ENABLE_L 12
 
-AccelStepper motors[3] = {
-    AccelStepper(AccelStepper::FULL4WIRE, AIN1R, AIN2R, BIN1R, BIN2R),
-    AccelStepper(AccelStepper::FULL4WIRE, AIN1R, AIN2R, BIN1R, BIN2R),
-    AccelStepper(AccelStepper::FULL4WIRE, AIN1R, AIN2R, BIN1R, BIN2R),
+enum MotorSlot : int
+{
+  MOTOR_LEFT = 0,
+  MOTOR_MIDDLE = 1,
+  MOTOR_RIGHT = 2,
 };
 
-const float MOTOR_MAX_SPEED    = 300.0f;
-const float MOTOR_ACCELERATION = 100.0f;
+const int MOTOR_ENABLE_PINS[3] = {ENABLE_L, ENABLE_M, ENABLE_R};
+const char *MOTOR_SLOT_NAMES[3] = {"left", "middle", "right"};
+
+AccelStepper dispenseMotor(AccelStepper::FULL4WIRE, AIN1R, AIN2R, BIN1R, BIN2R);
+
+const float MOTOR_MAX_SPEED    = 800.0f;  // from motor_test.cpp
+const float MOTOR_ACCELERATION = 200.0f;  // from motor_test.cpp
 const float STEPS_PER_GRAM     = 320.0f;          // CALIBRATE: steps / gram
 const unsigned long DISPENSE_TIMEOUT_MS = 15000;   // 15 s hard timeout
+
 
 // ── BLE Callbacks ─────────────────────────────────────────────────────────────
 
@@ -215,65 +218,103 @@ void notifyWeight(float weight)
 
 // ── Load cell helpers ─────────────────────────────────────────────────────────
 
+void disableAllMotors()
+{
+  for (int pin : MOTOR_ENABLE_PINS)
+    digitalWrite(pin, LOW);
+}
+
+bool selectMotor(int containerIdx)
+{
+  if (containerIdx < 0 || containerIdx > 2) return false;
+
+  disableAllMotors();
+  digitalWrite(MOTOR_ENABLE_PINS[containerIdx], HIGH); // held HIGH for entire dispense
+  Serial.printf("Selected %s motor (container %d) — ENABLE HIGH.\n",
+                MOTOR_SLOT_NAMES[containerIdx], containerIdx);
+  return true;
+}
+
+// Non-blocking read — safe to call inside the stepper loop.
+// Returns the cached value if the HX711 isn't ready yet.
 float readWeight()
 {
-  // HX711 disabled for motor testing — always return 0
-  // return 0.0f;
-
   if (!scaleReady || !scale.is_ready()) return currentWeight;
-  float reading = scale.get_units(10);
 
+  float reading = scale.get_units(3);
   if (fabs(reading) <= WEIGHT_ZERO_THRESHOLD) reading = 0.0f;
   currentWeight = reading;
   return currentWeight;
+}
+
+// Blocking read — up to `timeoutMs` ms. Use only when stepping is paused.
+float readWeightBlocking(unsigned long timeoutMs = 500)
+{
+  if (!scaleReady) return currentWeight;
+  if (!scale.wait_ready_timeout(timeoutMs, 5)) return currentWeight;
+  return readWeight();
 }
 
 // ── Dispense ──────────────────────────────────────────────────────────────────
 
 void runDispense(int containerIdx, float targetGrams, const String &commandId)
 {
-  // ── SINGLE-MOTOR TEST MODE ────────────────────────────────────────────────
-  // Set TEST_MOTOR_INDEX to 0, 1, or 2 to always use that motor regardless
-  // of the container_index sent by the backend.
-  // Set to -1 to disable test mode and use the real container_index.
-  const int TEST_MOTOR_INDEX = 0;
-  if (TEST_MOTOR_INDEX >= 0)
-    containerIdx = TEST_MOTOR_INDEX;
-  // ─────────────────────────────────────────────────────────────────────────
+  if (!selectMotor(containerIdx))
+  {
+    Serial.printf("Invalid container index %d\n", containerIdx);
+    notifyResult(commandId, "error", 0.0f, readWeight());
+    return;
+  }
 
-  Serial.printf("Dispensing %.2fg from container %d\n", targetGrams, containerIdx);
+  Serial.printf("Dispensing %.2fg from %s motor (container %d)\n",
+                targetGrams, MOTOR_SLOT_NAMES[containerIdx], containerIdx);
 
-  AccelStepper &motor = motors[containerIdx];
+  float weightBefore = readWeightBlocking(500);
   long stepsTarget = (long)(targetGrams * STEPS_PER_GRAM);
   bool timedOut = false;
 
-  motor.setCurrentPosition(0);
-  motor.moveTo(stepsTarget);
+  dispenseMotor.setCurrentPosition(0);
+  dispenseMotor.moveTo(stepsTarget);
 
   Serial.printf("Steps target: %ld, distanceToGo: %ld, maxSpeed: %.1f\n",
-                stepsTarget, motor.distanceToGo(), motor.maxSpeed());
+                stepsTarget, dispenseMotor.distanceToGo(), dispenseMotor.maxSpeed());
 
   unsigned long startMs = millis();
 
-  while (motor.distanceToGo() != 0)
+  // Keep stepping continuously (same style as motor_test.cpp).
+  // For now, do not stop early by weight; stop only by step target or timeout.
+
+  // TONY CHANGE THIS LATER TO DO A SIMPLE PID CONTROL USING THE LOAD CELL AS INPUT.
+  while (dispenseMotor.distanceToGo() != 0)
   {
-    motor.run();
+    dispenseMotor.run();
 
     if (millis() - startMs > DISPENSE_TIMEOUT_MS)
     {
-      motor.stop();
+      dispenseMotor.stop();
       timedOut = true;
       Serial.println("Dispense timed out.");
       break;
     }
   }
 
-  // Read final weight from load cell
-  float weightAfter = readWeight();
-  float actualGrams = timedOut ? 0.0f : targetGrams;
+  while (dispenseMotor.isRunning())
+  {
+    dispenseMotor.run();
+  }
+
+  disableAllMotors();
+
+  // Read final weight from load cell (blocking — motor stopped)
+  float weightAfter = readWeightBlocking(500);
+  float actualGrams = timedOut ? 0.0f : max(0.0f, weightAfter - weightBefore);
+  if (!scaleReady) actualGrams = timedOut ? 0.0f : targetGrams;
   const char *status = timedOut ? "error" : "done";
 
-  Serial.printf("Dispense %s — actual %.2fg, weight %.2fg\n", status, actualGrams, weightAfter);
+  Serial.printf("Dispense %s — actual %.2fg, weight %.2fg\n",
+                status,
+                actualGrams,
+                weightAfter);
 
   notifyResult(commandId, status, actualGrams, weightAfter);
 }
@@ -328,28 +369,31 @@ void setup()
   Serial.println("\n=== NuChef Dispenser (BLE) ===");
 
   pinMode(ENABLE_R, OUTPUT);
-  digitalWrite(ENABLE_R, HIGH);
   pinMode(ENABLE_M, OUTPUT);
-  digitalWrite(ENABLE_M, HIGH);
   pinMode(ENABLE_L, OUTPUT);
-  digitalWrite(ENABLE_L, HIGH);
+  disableAllMotors();
 
-  for (AccelStepper &m : motors)
-  {
-    m.setMaxSpeed(MOTOR_MAX_SPEED);
-    m.setAcceleration(MOTOR_ACCELERATION);
-  }
+  dispenseMotor.setMaxSpeed(MOTOR_MAX_SPEED);
+  dispenseMotor.setAcceleration(MOTOR_ACCELERATION);
   Serial.println("Motors configured.");
 
-  // ── HX711 load cell init (DISABLED for motor testing) ─────────────────────
+  // ── HX711 load cell init ───────────────────────────────────────────────────
   pinMode(LOADCELL_SCK_PIN, OUTPUT);
   digitalWrite(LOADCELL_SCK_PIN, LOW);
   scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
-  unsigned long tareStart = millis();
-  while (!scale.is_ready() && millis() - tareStart < 3000) { delay(10); }
-  if (scale.is_ready()) { scale.set_scale(HX711_SCALE_FACTOR); scale.tare(); scaleReady = true; }
-  scaleReady = false;
-  Serial.println("HX711: DISABLED for motor testing — weight will report 0.");
+  if (scale.wait_ready_timeout(HX711_READY_TIMEOUT_MS, 10))
+  {
+    scale.set_scale(HX711_SCALE_FACTOR);
+    scale.tare(10);
+    scaleReady = true;
+    currentWeight = 0.0f;
+    Serial.println("HX711: ready and tared.");
+  }
+  else
+  {
+    scaleReady = false;
+    Serial.println("HX711: not ready at boot — weight feedback disabled.");
+  }
 
   initBLE();
 }
@@ -391,7 +435,6 @@ void loop()
     dispensing   = false;
   }
 
-  // Keep all motors ticking (needed for FULL4WIRE AccelStepper)
-  for (AccelStepper &m : motors)
-    m.run();
+  // Keep the shared stepper bus ticking if a stop is still decelerating.
+  dispenseMotor.run();
 }

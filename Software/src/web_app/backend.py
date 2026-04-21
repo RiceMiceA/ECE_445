@@ -61,6 +61,7 @@ app.mount("/ui", StaticFiles(directory="main", html=True), name="frontend")
 # Constants — canonical spice names, fixed container layout
 # ---------------------------------------------------------------------------
 
+CONTAINER_POSITIONS: list[str] = ["left", "middle", "right"]
 CONTAINERS: list[str] = ["salt", "black pepper", "garlic powder"]
 VALID_CONTAINER_SET = set(CONTAINERS)
 
@@ -165,6 +166,7 @@ system_state: dict = {
     "confirmed_ingredients": [],
     "recipe": None,
     "current_step_index": -1,
+    "container_positions": deepcopy(CONTAINER_POSITIONS),
     "containers": deepcopy(CONTAINERS),
     "container_levels": [100, 100, 100],   # percentage remaining
     "weight": 0.0,

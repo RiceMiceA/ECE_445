@@ -7,6 +7,7 @@ const BACKEND_URL = window.location.origin;   // same origin as the UI
 // const BACKEND_URL = "http://192.168.197.86:8000";   // Triangle
 // const BACKEND_URL_ESP = "http://192.168.4.28:8000";    // 508 E John
 const POLL_MS = 2000;
+const DEFAULT_CONTAINER_POSITIONS = ["left", "middle", "right"];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -71,11 +72,16 @@ function renderState(state) {
     ds.className = "status-chip " + state.dispense_status;
 
     // Containers
-    renderContainers(state.containers, state.container_levels);
+    renderContainers(
+        state.containers,
+        state.container_levels,
+        state.container_positions || DEFAULT_CONTAINER_POSITIONS
+    );
 
     // Fill container edit fields if empty
     ["c0", "c1", "c2"].forEach((id, i) => {
         const el = document.getElementById(id);
+        el.placeholder = `${(state.container_positions || DEFAULT_CONTAINER_POSITIONS)[i]} slot`;
         if (!el.value) el.value = state.containers[i] || "";
     });
 
@@ -116,13 +122,13 @@ function renderList(id, items, emptyMsg) {
     }
 }
 
-function renderContainers(containers, levels) {
+function renderContainers(containers, levels, positions) {
     const el = document.getElementById("containers-info");
     el.innerHTML = containers
         .map(
             (name, i) => `
       <div class="container-row">
-        <span class="container-name">[${i}] ${name}</span>
+                <span class="container-name">${positions[i]} · ${name}</span>
         <div class="level-bar-wrap">
           <div class="level-bar" style="width:${levels[i] || 0}%"></div>
         </div>
