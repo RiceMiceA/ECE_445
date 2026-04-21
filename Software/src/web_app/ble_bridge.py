@@ -110,6 +110,8 @@ async def run_bridge(device: BLEDevice) -> None:
 
             def on_weight_notify(_sender: int, data: bytearray) -> None:
                 payload = json.loads(data.decode())
+                w = payload.get("weight", "?")
+                print(f"BLE WT   ← {w} g", end="\r")  # overwrite line in-place
                 asyncio.ensure_future(_forward_weight(payload))
 
             await client.start_notify(RSLT_CHAR_UUID, on_result_notify)
@@ -123,7 +125,8 @@ async def run_bridge(device: BLEDevice) -> None:
                     r = await http.get("/pending_command")
                     cmd = r.json()
 
-                    if cmd.get("action") == "dispense":
+                    action = cmd.get("action")
+                    if action in ("dispense", "tare"):
                         cmd_id = cmd.get("command_id")
 
                         # Don't re-send the same command

@@ -1,6 +1,6 @@
 // AI Nutritious Culinary Assistant — ESP32-S3 Dispenser Firmware (BLE)
 // TB6612 motor driver, FULL4WIRE steppers, BLE communication.
-// No HX711 load cell for now (weight always reports 0).
+// HX711 load cell on pins DOUT=19, SCK=20 for real-time weight.
 //
 // BLE Protocol:
 //   Advertises as "NuChef-Dispenser" with a custom GATT service.
@@ -29,6 +29,7 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 #include <ArduinoJson.h>
+#include "HX711.h"
 
 // ── BLE UUIDs ─────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,17 @@
 #define WT_CHAR_UUID   "4e7a9b1c-d203-4e2a-b8f1-67c1d9e3f5a3" // Notify
 
 const char *BLE_DEVICE_NAME = "NuChef-Dispenser";
+
+// ── Load cell (HX711) ──────────────────────────────────────────────────────────
+
+const int LOADCELL_DOUT_PIN = 4;
+const int LOADCELL_SCK_PIN  = 5;
+const float HX711_SCALE_FACTOR = 1250.0f;  // (raw reading) / actual grams — calibrate!
+const float WEIGHT_ZERO_THRESHOLD = 0.05f; // readings below this → 0
+
+HX711 scale;
+bool  scaleReady = false;   // set true only if tare succeeds
+float currentWeight = 0.0f; // latest reading in grams
 
 // ── BLE state ─────────────────────────────────────────────────────────────────
 
@@ -64,28 +76,27 @@ bool dispensing = false;
 // ── Motors — TB6612 FULL4WIRE steppers ────────────────────────────────────────
 // container_index from backend maps directly to motors[index]
 //
-// Right motor (container 0) — the only one wired for now
-#define AIN1R 10
-#define AIN2R 11
-#define BIN1R 12
-#define BIN2R 13
+// Right motor (container 0) — the only one wired for now Breadboard
+// #define AIN1R 10
+// #define AIN2R 11
+// #define BIN1R 12
+// #define BIN2R 13
 
-// Middle motor (container 1) — TODO: update when wired
-#define AIN1M 10   // placeholder — change to real pins
-#define AIN2M 11
-#define BIN1M 12
-#define BIN2M 13
 
-// Left motor (container 2) — TODO: update when wired
-#define AIN1L 10   // placeholder — change to real pins
-#define AIN2L 11
-#define BIN1L 12
-#define BIN2L 13
+// Right motor (container 0) — the only one wired for now PCB
+#define AIN1R 21
+#define AIN2R 47
+#define BIN1R 45
+#define BIN2R 48
+#define ENABLE_R 14
+
+#define ENABLE_M 13
+#define ENABLE_L 12
 
 AccelStepper motors[3] = {
     AccelStepper(AccelStepper::FULL4WIRE, AIN1R, AIN2R, BIN1R, BIN2R),
-    AccelStepper(AccelStepper::FULL4WIRE, AIN1M, AIN2M, BIN1M, BIN2M),
-    AccelStepper(AccelStepper::FULL4WIRE, AIN1L, AIN2L, BIN1L, BIN2L),
+    AccelStepper(AccelStepper::FULL4WIRE, AIN1R, AIN2R, BIN1R, BIN2R),
+    AccelStepper(AccelStepper::FULL4WIRE, AIN1R, AIN2R, BIN1R, BIN2R),
 };
 
 const float MOTOR_MAX_SPEED    = 300.0f;
@@ -127,6 +138,31 @@ class CmdCharCallbacks : public BLECharacteristicCallbacks
     }
 
     const char *action = doc["action"] | "none";
+
+    // ── Tare command — immediate, no queuing ──
+    if (strcmp(action, "tare") == 0) {
+      if (scaleReady) {
+        scale.tare();
+        currentWeight = 0.0f;
+        Serial.println("HX711: tared via BLE.");
+        // Send result back
+        if (deviceConnected) {
+          JsonDocument rdoc;
+          rdoc["command_id"] = doc["command_id"] | "tare";
+          rdoc["status"]     = "done";
+          rdoc["actual_grams"] = 0;
+          rdoc["weight"]     = 0.0f;
+          String body;
+          serializeJson(rdoc, body);
+          pRsltChar->setValue(body.c_str());
+          pRsltChar->notify();
+        }
+      } else {
+        Serial.println("HX711: tare requested but scale not ready.");
+      }
+      return;
+    }
+
     if (strcmp(action, "dispense") != 0) return;
 
     const char *id = doc["command_id"] | "";
@@ -177,6 +213,21 @@ void notifyWeight(float weight)
   pWtChar->notify();
 }
 
+// ── Load cell helpers ─────────────────────────────────────────────────────────
+
+float readWeight()
+{
+  // HX711 disabled for motor testing — always return 0
+  // return 0.0f;
+
+  if (!scaleReady || !scale.is_ready()) return currentWeight;
+  float reading = scale.get_units(10);
+
+  if (fabs(reading) <= WEIGHT_ZERO_THRESHOLD) reading = 0.0f;
+  currentWeight = reading;
+  return currentWeight;
+}
+
 // ── Dispense ──────────────────────────────────────────────────────────────────
 
 void runDispense(int containerIdx, float targetGrams, const String &commandId)
@@ -199,6 +250,9 @@ void runDispense(int containerIdx, float targetGrams, const String &commandId)
   motor.setCurrentPosition(0);
   motor.moveTo(stepsTarget);
 
+  Serial.printf("Steps target: %ld, distanceToGo: %ld, maxSpeed: %.1f\n",
+                stepsTarget, motor.distanceToGo(), motor.maxSpeed());
+
   unsigned long startMs = millis();
 
   while (motor.distanceToGo() != 0)
@@ -214,13 +268,14 @@ void runDispense(int containerIdx, float targetGrams, const String &commandId)
     }
   }
 
-  // Without a load cell we report the target as actual
+  // Read final weight from load cell
+  float weightAfter = readWeight();
   float actualGrams = timedOut ? 0.0f : targetGrams;
   const char *status = timedOut ? "error" : "done";
 
-  Serial.printf("Dispense %s — actual %.2fg\n", status, actualGrams);
+  Serial.printf("Dispense %s — actual %.2fg, weight %.2fg\n", status, actualGrams, weightAfter);
 
-  notifyResult(commandId, status, actualGrams, 0.0f);
+  notifyResult(commandId, status, actualGrams, weightAfter);
 }
 
 // ── BLE initialisation ───────────────────────────────────────────────────────
@@ -272,12 +327,29 @@ void setup()
   delay(1500); // give USB CDC time to enumerate
   Serial.println("\n=== NuChef Dispenser (BLE) ===");
 
+  pinMode(ENABLE_R, OUTPUT);
+  digitalWrite(ENABLE_R, HIGH);
+  pinMode(ENABLE_M, OUTPUT);
+  digitalWrite(ENABLE_M, HIGH);
+  pinMode(ENABLE_L, OUTPUT);
+  digitalWrite(ENABLE_L, HIGH);
+
   for (AccelStepper &m : motors)
   {
     m.setMaxSpeed(MOTOR_MAX_SPEED);
     m.setAcceleration(MOTOR_ACCELERATION);
   }
   Serial.println("Motors configured.");
+
+  // ── HX711 load cell init (DISABLED for motor testing) ─────────────────────
+  pinMode(LOADCELL_SCK_PIN, OUTPUT);
+  digitalWrite(LOADCELL_SCK_PIN, LOW);
+  scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
+  unsigned long tareStart = millis();
+  while (!scale.is_ready() && millis() - tareStart < 3000) { delay(10); }
+  if (scale.is_ready()) { scale.set_scale(HX711_SCALE_FACTOR); scale.tare(); scaleReady = true; }
+  scaleReady = false;
+  Serial.println("HX711: DISABLED for motor testing — weight will report 0.");
 
   initBLE();
 }
@@ -303,7 +375,8 @@ void loop()
   if (now - lastHeartbeat >= HEARTBEAT_MS)
   {
     lastHeartbeat = now;
-    notifyWeight(0.0f); // no load cell — always 0
+    float w = readWeight();
+    notifyWeight(w);
   }
 
   // Process pending dispense command (skip while a dispense is running)

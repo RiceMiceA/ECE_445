@@ -17,7 +17,17 @@ import os
 import uuid
 import datetime
 from copy import deepcopy
+from pathlib import Path
 from typing import Literal, Optional
+
+# Auto-load .env file (OPENAI_API_KEY, OPENAI_MODEL, USE_LLM_PLANNER)
+_env_path = Path(__file__).resolve().parent / ".env"
+if _env_path.exists():
+    for _line in _env_path.read_text().splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _k, _v = _line.split("=", 1)
+            os.environ.setdefault(_k.strip(), _v.strip())
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -654,6 +664,18 @@ def command_result(payload: CommandResultPayload):
 # ---------------------------------------------------------------------------
 # Endpoints — hardware status
 # ---------------------------------------------------------------------------
+
+
+@app.post("/tare")
+def tare_scale():
+    """Send a tare command to the ESP32 load cell via BLE bridge."""
+    command = {
+        "command_id": _make_command_id(),
+        "action": "tare",
+    }
+    system_state["pending_command"] = command
+    system_state["weight"] = 0.0
+    return {"ok": True, "command": command}
 
 
 @app.post("/status_update")

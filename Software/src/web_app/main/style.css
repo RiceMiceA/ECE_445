@@ -381,6 +381,12 @@ ul li.empty {
     font-weight: 700;
     color: var(--accent2);
     letter-spacing: 0.04em;
+    transition: color 0.3s ease;
+}
+
+.weight.pulse {
+    color: #66ffaa;
+    text-shadow: 0 0 8px rgba(102, 255, 170, 0.4);
 }
 
 .status-chip {

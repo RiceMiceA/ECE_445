@@ -56,9 +56,14 @@ function renderState(state) {
     // Confirmed
     renderList("confirmed-list", state.confirmed_ingredients, "None confirmed");
 
-    // Weight
-    document.getElementById("weight-display").textContent =
-        state.weight.toFixed(2) + " g";
+    // Weight (pulse when value changes)
+    const wEl = document.getElementById("weight-display");
+    const newW = state.weight.toFixed(2) + " g";
+    if (wEl.textContent !== newW) {
+        wEl.textContent = newW;
+        wEl.classList.add("pulse");
+        setTimeout(() => wEl.classList.remove("pulse"), 600);
+    }
 
     // Dispense status
     const ds = document.getElementById("dispense-status");
@@ -154,6 +159,15 @@ function renderRecipe(recipe, currentIdx, demoState) {
 }
 
 // ── Button handlers ───────────────────────────────────────────────────────────
+
+document.getElementById("btn-tare").addEventListener("click", async () => {
+    try {
+        await api("/tare", "POST");
+        toast("Tare command sent — scale zeroed.");
+    } catch (e) {
+        toast(e.message, true);
+    }
+});
 
 document.getElementById("btn-reset").addEventListener("click", async () => {
     try {
