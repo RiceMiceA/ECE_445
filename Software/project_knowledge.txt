@@ -162,6 +162,122 @@ SUCCESS CRITERIA
   detect → plan → guide → dispense
 
 ====================
+ANIMATION / VISUAL EFFECTS (Web Dashboard)
+====================
+
+Added to the web dashboard (main/script.js + main/style.css):
+
+1. Weight pulse
+   - When the live weight value changes, the weight display element gets the
+     CSS class "pulse" for 600 ms, then the class is removed (JS setTimeout).
+   - CSS: .weight.pulse → color snaps to #66ffaa with a soft green glow
+     (text-shadow: 0 0 8px rgba(102,255,170,0.4)).
+
+2. Dispense status chip colours
+   - .status-chip.idle → dark blue background, muted text
+   - .status-chip.dispensing → purple tint (matches dispense action)
+   - .status-chip.done → green tint
+   - .status-chip.error → red tint
+
+3. Level-bar width transition
+   - Container level bars animate width changes over 0.4 s
+     (transition: width 0.4s).
+
+4. Button hover lift
+   - Buttons get a subtle upward translate (transform: translateY(-1px))
+     on :hover with opacity/transform transitions (0.15 s / 0.1 s).
+
+5. Weight colour transition
+   - Base .weight colour transitions smoothly (transition: color 0.3 s ease)
+     so the green pulse fades back to the default accent colour.
+
+6. Poll indicator fade
+   - The poll-indicator dot opacity transitions in/out at 0.3 s.
+
+Backend render-plan presets (consumed by Quest Unity frontend):
+   - focus_preset values: soft_highlight | pulse_highlight | success_pulse
+     | text_panel_only
+   - assist_preset values: ghost_hand_grab | arrow_to_target |
+     ghost_hand_move | arrow_dispenser_to_target | ghost_hand_sprinkle |
+     timer_ring
+   These are populated per step action type in _compile_render_plan()
+   and sent to the Quest via GET /current_step.
+
+====================
+CONTROLLER BUTTONS & INPUT LOGIC (Quest 3)
+====================
+
+Input is handled by InputManager.cs (auto-instantiated as DontDestroyOnLoad).
+Each frame it snapshots OVRPlugin hand state to detect pinch rising-edges.
+
+Two input methods are unified per action:
+
+  Button A  OR  Index-finger pinch  (either hand)
+    → IsButtonADownOrPinchStarted()
+
+  Button B  OR  Middle-finger pinch  (either hand)
+    → IsButtonBDownOrMiddleFingerPinchStarted()
+
+--------------------
+BUTTON A — Confirm / Advance
+--------------------
+
+Context 1: Initial menu (DetectionUiMenuManager)
+  - Dismisses the start-up panel and begins detection.
+
+Context 2: Scanning (DetectionManager, !RecipeGuidanceManager.IsGuiding)
+  - Spawns 3D spatial markers on every visible bounding box.
+  - Collects all visible ingredient class names.
+  - Calls IngredientInventoryManager.ConfirmVisibleIngredients().
+  - Calls BackendClient.GenerateRecipe() with the confirmed list.
+    → Triggers POST /generate_recipe on the backend.
+
+Context 3: Recipe guidance (RecipeGuidanceManager.IsGuiding)
+  - If current step completion_mode == "user_confirm" and waiting:
+    → Calls AdvanceStep() → POST /advance_step on the backend.
+  - NOT processed by DetectionManager while guiding (gated by IsGuiding flag).
+
+--------------------
+BUTTON B — Cancel / Clean
+--------------------
+
+Context 1: While guiding (RecipeGuidanceManager.IsGuiding == true)
+  - Calls RecipeGuidanceManager.StopGuidance():
+    → Clears all AR cues (CueRenderer.ClearCues())
+    → Hides the HUD (GuidanceHudController.Hide())
+    → Resets IsGuiding = false
+    → Does NOT reset the backend recipe — it stays loaded.
+
+Context 2: Not guiding
+  - Calls DetectionManager.CleanMarkers():
+    → Destroys all spawned 3D spatial marker GameObjects
+    → Clears IngredientInventoryManager
+    → Fires OnObjectsIdentified(-1) event
+
+--------------------
+STEP COMPLETION MODES (auto-advance, no button needed)
+--------------------
+
+  dispense_done  → WatchDispenseDone() polls step_status.dispense_status
+                   every m_pollInterval; advances when == "done".
+
+  timer_done     → WatchTimerDone(duration_s) counts down locally each second,
+                   updates HUD timer display, then advances.
+
+  auto           → WatchAutoAdvance() waits m_autoAdvanceDelay (1.5 s) then
+                   advances automatically (used for "complete" action).
+
+  user_confirm   → Waits for Button A / index pinch (see Context 3 above).
+
+--------------------
+INPUT PRIORITY / GUARD
+--------------------
+
+  RecipeGuidanceManager.IsGuiding is a static bool.
+  DetectionManager checks !IsGuiding before processing Button A for scanning,
+  so the two modes never conflict — guidance always wins input priority.
+
+====================
 SHORT DESCRIPTION
 ====================
 
