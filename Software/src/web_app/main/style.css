@@ -311,6 +311,22 @@ ul li.empty {
     color: #000;
 }
 
+.step-action-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #2a2a3a;
+    color: #9090cc;
+    flex-shrink: 0;
+    align-self: center;
+}
+
+.step.active .step-action-badge { background: var(--accent); color: #fff; }
+.step.done  .step-action-badge  { background: var(--accent2); color: #000; }
+
 .step-text {
     flex: 1;
     line-height: 1.45;

@@ -104,7 +104,7 @@ function renderState(state) {
     const step = hasRecipe
         ? state.recipe.steps[state.current_step_index]
         : null;
-    const isDispenseStep = step && step.type === "dispense";
+    const isDispenseStep = step && step.action === "season";
     const notComplete = state.demo_state !== "complete";
 
     document.getElementById("btn-dispense").disabled =
@@ -150,14 +150,15 @@ function renderRecipe(recipe, currentIdx, demoState) {
             else if (step.index === currentIdx) cls += " active";
 
             const dispenseTag =
-                step.type === "dispense" && step.dispense
+                step.action === "season" && step.dispense
                     ? `<span class="dispense-tag">${step.dispense.spice} · ${step.dispense.grams}g</span>`
                     : "";
 
             return `
         <div class="${cls}">
           <span class="step-num">${step.index + 1}</span>
-          <span class="step-text">${step.instruction}</span>
+          <span class="step-action-badge">${step.action}</span>
+          <span class="step-text">${step.display_text}</span>
           ${dispenseTag}
         </div>`;
         })

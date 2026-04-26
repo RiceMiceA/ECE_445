@@ -94,19 +94,40 @@ Hard rules:
 - Use only the loaded spices supplied in the input.
 - The only supported spices are salt, black pepper, garlic powder.
 - Prefer one-pan or one-bowl recipes.
-- If can_generate is true, return 3 to 6 total steps.
-- Use at most 3 dispense steps.
-- Each instruction must be one short sentence that fits in AR.
-- For dispense steps, include a dispense object with spice + grams.
+- If can_generate is true, return 4 to 8 total steps.
+- Use at most 3 season/dispense steps (action="season").
+- Each step must be ATOMIC: one step = one main action.
+- display_text and voice_text must be one short sentence that fits in AR.
+- For season steps (action="season"), include a dispense object with spice + grams.
 - Each dispense amount must be between 0.2 and 4.0 grams.
+
+Semantic step rules:
+- Use action="grab" when the user picks up an ingredient.
+- Use action="move" when the user moves an ingredient to a destination (set destination).
+- Use action="dispense" when spice is dispensed onto an ingredient (set dispense, set targets to the ingredient).
+- Use action="mix" when the user stirs or combines ingredients.
+- Use action="focus" for an initial notice/orient step.
+- Use action="wait" with duration_s for timed cooking steps.
+- Use action="complete" for the final done step.
+- Set targets to an array with one entry for the main ingredient or object being acted on.
+- Use selector="label" and value=the ingredient name as it appears in confirmed_ingredients.
+- Set completion_mode="dispense_done" for season steps.
+- Set completion_mode="user_confirm" for grab/move/mix/focus steps.
+- Set completion_mode="timer_done" for wait steps.
+- Set completion_mode="auto" for complete steps.
+- Set duration_s only for wait steps; set it to null for all other steps.
+- Set destination only for move steps; set it to null for all other steps.
+- Never output prefab names, material names, animation names, motor commands, or hardware details.
 - Never invent extra ingredients, sauces, oils, or garnishes.
-- Never output motor commands, PWM, timing pulses, step counts, or hardware details.
 - If the ingredient set is insufficient, set can_generate=false and return an empty steps list.
 
 Style:
 - Optimize for a reliable, visually clean demo.
 - Keep instructions short and direct.
 """.strip()
+
+VALID_ACTIONS = {"focus", "grab", "move", "season", "mix", "wait", "complete"}
+VALID_COMPLETION_MODES = {"user_confirm", "dispense_done", "timer_done", "auto"}
 
 RECIPE_PLAN_SCHEMA = {
     "type": "object",
@@ -119,15 +140,64 @@ RECIPE_PLAN_SCHEMA = {
         "steps": {
             "type": "array",
             "minItems": 0,
-            "maxItems": 6,
+            "maxItems": 8,
             "items": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["index", "instruction", "type", "dispense"],
+                "required": [
+                    "index",
+                    "display_text",
+                    "voice_text",
+                    "action",
+                    "targets",
+                    "destination",
+                    "completion_mode",
+                    "duration_s",
+                    "dispense",
+                ],
                 "properties": {
-                    "index": {"type": "integer", "minimum": 0, "maximum": 5},
-                    "instruction": {"type": "string", "minLength": 1, "maxLength": 140},
-                    "type": {"type": "string", "enum": ["cook", "dispense"]},
+                    "index": {"type": "integer", "minimum": 0, "maximum": 7},
+                    "display_text": {"type": "string", "minLength": 1, "maxLength": 140},
+                    "voice_text": {"type": "string", "minLength": 1, "maxLength": 140},
+                    "action": {
+                        "type": "string",
+                        "enum": ["focus", "grab", "move", "season", "mix", "wait", "complete"],
+                    },
+                    "targets": {
+                        "type": "array",
+                        "minItems": 0,
+                        "maxItems": 4,
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": ["selector", "value"],
+                            "properties": {
+                                "selector": {"type": "string", "enum": ["label"]},
+                                "value": {"type": "string", "minLength": 1, "maxLength": 60},
+                            },
+                        },
+                    },
+                    "destination": {
+                        "anyOf": [
+                            {"type": "null"},
+                            {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "required": ["selector", "value"],
+                                "properties": {
+                                    "selector": {"type": "string", "enum": ["label"]},
+                                    "value": {"type": "string", "minLength": 1, "maxLength": 60},
+                                },
+                            },
+                        ]
+                    },
+                    "completion_mode": {
+                        "type": "string",
+                        "enum": ["user_confirm", "dispense_done", "timer_done", "auto"],
+                    },
+                    "duration_s": {
+                        "anyOf": [{"type": "null"}, {"type": "number", "minimum": 1, "maximum": 600}]
+                    },
                     "dispense": {
                         "anyOf": [
                             {"type": "null"},
@@ -171,6 +241,7 @@ system_state: dict = {
     "container_levels": [100, 100, 100],   # percentage remaining
     "weight": 0.0,
     "dispense_status": "idle",            # idle | dispensing | done | error
+    "dispense_baseline_weight": None,     # set when /dispense_step is called
     "manual_override": False,
     "resume_state": "idle",
     "last_error": None,
@@ -222,48 +293,208 @@ def _normalize_ingredients(ingredients: list[str]) -> list[str]:
     return cleaned
 
 
+def _make_step_id(index: int) -> str:
+    return f"step_{index}"
+
+
+def _resolve_default_completion_mode(action: str) -> str:
+    return {
+        "focus": "user_confirm",
+        "grab": "user_confirm",
+        "move": "user_confirm",
+        "season": "dispense_done",
+        "mix": "user_confirm",
+        "wait": "timer_done",
+        "complete": "auto",
+    }.get(action, "user_confirm")
+
+
+def _compile_render_plan(step: dict) -> dict:
+    action = step.get("action", "focus")
+
+    if action == "focus":
+        return {
+            "focus_preset": "soft_highlight",
+            "assist_presets": [],
+            "hud": {"show_text": True, "show_spice": False, "show_target_grams": False,
+                    "show_live_progress": False, "show_timer": False},
+        }
+    if action == "grab":
+        return {
+            "focus_preset": "pulse_highlight",
+            "assist_presets": ["ghost_hand_grab"],
+            "hud": {"show_text": True, "show_spice": False, "show_target_grams": False,
+                    "show_live_progress": False, "show_timer": False},
+        }
+    if action == "move":
+        return {
+            "focus_preset": "pulse_highlight",
+            "assist_presets": ["arrow_to_target", "ghost_hand_move"],
+            "hud": {"show_text": True, "show_spice": False, "show_target_grams": False,
+                    "show_live_progress": False, "show_timer": False},
+        }
+    if action == "season":
+        return {
+            "focus_preset": "soft_highlight",
+            "assist_presets": ["arrow_dispenser_to_target", "ghost_hand_sprinkle"],
+            "hud": {"show_text": True, "show_spice": True, "show_target_grams": True,
+                    "show_live_progress": True, "show_timer": False},
+        }
+    if action == "mix":
+        return {
+            "focus_preset": "pulse_highlight",
+            "assist_presets": ["ghost_hand_move"],
+            "hud": {"show_text": True, "show_spice": False, "show_target_grams": False,
+                    "show_live_progress": False, "show_timer": False},
+        }
+    if action == "wait":
+        return {
+            "focus_preset": "soft_highlight",
+            "assist_presets": ["timer_ring"],
+            "hud": {"show_text": True, "show_spice": False, "show_target_grams": False,
+                    "show_live_progress": False, "show_timer": True},
+        }
+    if action == "complete":
+        return {
+            "focus_preset": "success_pulse",
+            "assist_presets": [],
+            "hud": {"show_text": True, "show_spice": False, "show_target_grams": False,
+                    "show_live_progress": False, "show_timer": False},
+        }
+    # fallback
+    return {
+        "focus_preset": "text_panel_only",
+        "assist_presets": [],
+        "hud": {"show_text": True, "show_spice": False, "show_target_grams": False,
+                "show_live_progress": False, "show_timer": False},
+    }
+
+
+def _build_step_status(step: dict) -> dict:
+    """Build the live step_status block based on the current step and system state."""
+    action = step.get("action", "")
+    dispense_info = step.get("dispense")
+
+    if action == "season" and dispense_info:
+        baseline = system_state.get("dispense_baseline_weight")
+        current_weight = system_state["weight"]
+        target_grams = dispense_info["grams"]
+        if baseline is not None:
+            current_grams = round(max(0.0, current_weight - baseline), 2)
+        else:
+            current_grams = None
+        return {
+            "dispense_status": system_state["dispense_status"],
+            "target_grams": target_grams,
+            "current_grams": current_grams,
+            "actual_grams": system_state.get("last_dispense_actual_grams"),
+            "timer_remaining_s": None,
+        }
+
+    # For wait steps the client handles countdown locally; backend sets duration
+    if action == "wait":
+        return {
+            "dispense_status": None,
+            "target_grams": None,
+            "current_grams": None,
+            "actual_grams": None,
+            "timer_remaining_s": step.get("duration_s"),
+        }
+
+    return {
+        "dispense_status": None,
+        "target_grams": None,
+        "current_grams": None,
+        "actual_grams": None,
+        "timer_remaining_s": None,
+    }
+
+
 
 def _generate_mock_recipe(ingredients: list[str]) -> dict:
     """
     Placeholder recipe generator.
     Keeps the backend demoable if the LLM planner is unavailable.
+    Returns fully enriched steps with semantic fields, step_id, and render_plan.
     """
-    steps = [
+    ing_label = ingredients[0] if ingredients else "ingredient"
+    raw_steps = [
         {
             "index": 0,
-            "instruction": f"Prepare your ingredients: {', '.join(ingredients)}.",
-            "type": "cook",
+            "display_text": f"Locate your {ing_label}.",
+            "voice_text": f"Locate your {ing_label}.",
+            "action": "focus",
+            "targets": [{"selector": "label", "value": ing_label}],
+            "destination": None,
+            "completion_mode": "user_confirm",
+            "duration_s": None,
             "dispense": None,
         },
         {
             "index": 1,
-            "instruction": "Dispense salt into the bowl.",
-            "type": "dispense",
-            "dispense": {"spice": "salt", "grams": 3.0},
-        },
-        {
-            "index": 2,
-            "instruction": "Dispense black pepper into the bowl.",
-            "type": "dispense",
-            "dispense": {"spice": "black pepper", "grams": 1.5},
-        },
-        {
-            "index": 3,
-            "instruction": "Cook on medium heat for 8 minutes.",
-            "type": "cook",
+            "display_text": f"Grab the {ing_label} and place it in the bowl.",
+            "voice_text": f"Grab the {ing_label} and place it in the bowl.",
+            "action": "move",
+            "targets": [{"selector": "label", "value": ing_label}],
+            "destination": {"selector": "label", "value": "bowl"},
+            "completion_mode": "user_confirm",
+            "duration_s": None,
             "dispense": None,
         },
         {
+            "index": 2,
+            "display_text": "Season with salt.",
+            "voice_text": "Season with salt.",
+            "action": "season",
+            "targets": [{"selector": "label", "value": ing_label}],
+            "destination": None,
+            "completion_mode": "dispense_done",
+            "duration_s": None,
+            "dispense": {"spice": "salt", "grams": 3.0},
+        },
+        {
+            "index": 3,
+            "display_text": "Season with black pepper.",
+            "voice_text": "Season with black pepper.",
+            "action": "season",
+            "targets": [{"selector": "label", "value": ing_label}],
+            "destination": None,
+            "completion_mode": "dispense_done",
+            "duration_s": None,
+            "dispense": {"spice": "black pepper", "grams": 1.5},
+        },
+        {
             "index": 4,
-            "instruction": "Dispense garlic powder before serving.",
-            "type": "dispense",
-            "dispense": {"spice": "garlic powder", "grams": 2.0},
+            "display_text": "Mix everything together.",
+            "voice_text": "Mix everything together.",
+            "action": "mix",
+            "targets": [{"selector": "label", "value": ing_label}],
+            "destination": None,
+            "completion_mode": "user_confirm",
+            "duration_s": None,
+            "dispense": None,
+        },
+        {
+            "index": 5,
+            "display_text": "Your dish is ready!",
+            "voice_text": "Your dish is ready!",
+            "action": "complete",
+            "targets": [],
+            "destination": None,
+            "completion_mode": "auto",
+            "duration_s": None,
+            "dispense": None,
         },
     ]
+    enriched = []
+    for s in raw_steps:
+        s["step_id"] = _make_step_id(s["index"])
+        s["render_plan"] = _compile_render_plan(s)
+        enriched.append(s)
     return {
         "name": "AI Chef's Special",
         "description": f"A recipe generated from: {', '.join(ingredients)}.",
-        "steps": steps,
+        "steps": enriched,
     }
 
 
@@ -276,10 +507,23 @@ class DispenseSpec(BaseModel):
         extra = "forbid"
 
 
+class SelectorTarget(BaseModel):
+    selector: Literal["label"]
+    value: str = Field(min_length=1, max_length=60)
+
+    class Config:
+        extra = "forbid"
+
+
 class RecipeStep(BaseModel):
-    index: int = Field(ge=0, le=5)
-    instruction: str = Field(min_length=1, max_length=140)
-    type: Literal["cook", "dispense"]
+    index: int = Field(ge=0, le=7)
+    display_text: str = Field(min_length=1, max_length=140)
+    voice_text: str = Field(min_length=1, max_length=140)
+    action: Literal["focus", "grab", "move", "season", "mix", "wait", "complete"]
+    targets: list[SelectorTarget] = Field(default_factory=list)
+    destination: Optional[SelectorTarget] = None
+    completion_mode: Literal["user_confirm", "dispense_done", "timer_done", "auto"]
+    duration_s: Optional[float] = None
     dispense: Optional[DispenseSpec] = None
 
     class Config:
@@ -301,45 +545,68 @@ def _postprocess_recipe_plan(plan: RecipePlan, confirmed_ingredients: list[str])
     if not plan.can_generate:
         raise ValueError("Planner declined recipe generation.")
 
-    if not (3 <= len(plan.steps) <= 6):
-        raise ValueError(f"Expected 3-6 steps, got {len(plan.steps)}")
+    if not (3 <= len(plan.steps) <= 8):
+        raise ValueError(f"Expected 3-8 steps, got {len(plan.steps)}")
 
     cleaned_steps: list[dict] = []
     dispense_count = 0
 
     for i, step in enumerate(plan.steps):
-        instruction = " ".join(step.instruction.strip().split())
-        if not instruction:
-            raise ValueError("Empty instruction returned by planner.")
+        display_text = " ".join(step.display_text.strip().split())
+        voice_text = " ".join(step.voice_text.strip().split()) or display_text
+        if not display_text:
+            raise ValueError("Empty display_text returned by planner.")
 
-        if step.type == "dispense":
+        action = step.action
+        if action not in VALID_ACTIONS:
+            raise ValueError(f"Invalid action from planner: {action}")
+
+        completion_mode = step.completion_mode
+        if completion_mode not in VALID_COMPLETION_MODES:
+            raise ValueError(f"Invalid completion_mode from planner: {completion_mode}")
+
+        # Validate dispense info
+        dispense_out: Optional[dict] = None
+        if action == "season":
             if step.dispense is None:
-                raise ValueError("Dispense step missing dispense payload.")
+                raise ValueError(f"Season step at index {i} missing dispense payload.")
             spice = step.dispense.spice
             if spice not in system_state["containers"]:
                 raise ValueError(f"Planner used unloaded spice: {spice}")
             grams = round(float(step.dispense.grams), 1)
+            dispense_out = {"spice": spice, "grams": grams}
             dispense_count += 1
-            cleaned_steps.append(
-                {
-                    "index": i,
-                    "instruction": instruction,
-                    "type": "dispense",
-                    "dispense": {"spice": spice, "grams": grams},
-                }
-            )
         else:
-            cleaned_steps.append(
-                {
-                    "index": i,
-                    "instruction": instruction,
-                    "type": "cook",
-                    "dispense": None,
-                }
-            )
+            if step.dispense is not None:
+                raise ValueError(f"Non-season step at index {i} has unexpected dispense payload.")
 
-    if dispense_count > 3:
-        raise ValueError("Too many dispense steps.")
+        if dispense_count > 3:
+            raise ValueError("Too many season/dispense steps (max 3).")
+
+        # Validate targets
+        targets_out = [{"selector": t.selector, "value": t.value} for t in step.targets]
+
+        # Validate destination
+        dest_out = (
+            {"selector": step.destination.selector, "value": step.destination.value}
+            if step.destination
+            else None
+        )
+
+        entry: dict = {
+            "index": i,
+            "step_id": _make_step_id(i),
+            "display_text": display_text,
+            "voice_text": voice_text,
+            "action": action,
+            "targets": targets_out,
+            "destination": dest_out,
+            "completion_mode": completion_mode,
+            "duration_s": step.duration_s if action == "wait" else None,
+            "dispense": dispense_out,
+        }
+        entry["render_plan"] = _compile_render_plan(entry)
+        cleaned_steps.append(entry)
 
     return {
         "name": plan.name.strip(),
@@ -474,6 +741,7 @@ def reset():
             "pending_command": None,
             "last_planner_status": None,
             "last_dispense_actual_grams": None,
+            "dispense_baseline_weight": None,
         }
     )
     return {"ok": True, "demo_state": "idle"}
@@ -544,18 +812,27 @@ def generate_recipe(payload: GenerateRecipePayload):
 
 @app.get("/current_step")
 def current_step():
-    """Return the current active recipe step."""
+    """Return the current active recipe step with full AR guidance metadata."""
     step = _current_step()
     if step is None:
         return {"step": None, "demo_state": system_state["demo_state"]}
     recipe = system_state["recipe"]
     return {
+        "schema_version": 1,
+        "step_id": step.get("step_id", _make_step_id(step["index"])),
         "step_index": step["index"],
-        "instruction": step["instruction"],
-        "type": step["type"],
-        "dispense": step.get("dispense"),
         "total_steps": len(recipe["steps"]),
         "demo_state": system_state["demo_state"],
+        "display_text": step.get("display_text", ""),
+        "voice_text": step.get("voice_text", step.get("display_text", "")),
+        "action": step.get("action", "focus"),
+        "targets": step.get("targets", []),
+        "destination": step.get("destination"),
+        "completion_mode": step.get("completion_mode", "user_confirm"),
+        "duration_s": step.get("duration_s"),
+        "dispense": step.get("dispense"),
+        "render_plan": step.get("render_plan", _compile_render_plan(step)),
+        "step_status": _build_step_status(step),
     }
 
 
@@ -575,9 +852,11 @@ def advance_step():
         return {"ok": True, "demo_state": "complete", "step": None}
 
     system_state["current_step_index"] = idx + 1
+    system_state["dispense_status"] = "idle"
+    system_state["dispense_baseline_weight"] = None
     new_step = _current_step()
 
-    if new_step["type"] == "dispense":
+    if new_step["action"] == "season":
         _set_state("dispensing_step")
     else:
         _set_state("user_cook_step")
@@ -603,8 +882,8 @@ def dispense_step():
     step = _current_step()
     if step is None:
         raise HTTPException(status_code=400, detail="No active step.")
-    if step["type"] != "dispense":
-        raise HTTPException(status_code=400, detail="Current step is not a dispense step.")
+    if step["action"] != "season":
+        raise HTTPException(status_code=400, detail="Current step is not a season/dispense step.")
 
     dispense = step["dispense"]
     spice = dispense["spice"]
@@ -641,15 +920,24 @@ def pending_command():
 
 @app.post("/command_result")
 def command_result(payload: CommandResultPayload):
-    """ESP32 reports the outcome of a dispense command."""
+    """ESP32 reports the outcome of a dispense or tare command."""
     pending = system_state.get("pending_command")
     if pending and pending["command_id"] != payload.command_id:
         raise HTTPException(status_code=400, detail="command_id mismatch.")
 
+    pending_action = (pending or {}).get("action", "dispense")
     system_state["pending_command"] = None
 
     if payload.weight is not None:
         system_state["weight"] = payload.weight
+
+    # Tare results update the weight but must NOT touch dispense_status.
+    if pending_action == "tare":
+        if payload.status != "done":
+            system_state["last_error"] = f"Tare failed for cmd {payload.command_id}"
+        return {"ok": True, "dispense_status": system_state["dispense_status"]}
+
+    # Dispense result handling
     if payload.actual_grams is not None:
         system_state["last_dispense_actual_grams"] = payload.actual_grams
 

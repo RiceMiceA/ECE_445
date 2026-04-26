@@ -74,17 +74,71 @@ When switching networks, update the backend IP (`192.168.x.x`) in these files:
 | File | Line | Variable |
 |------|------|----------|
 | [`Software/src/Unity-PassthroughCameraApiSamples/Assets/PassthroughCameraApiSamples/MultiObjectDetection/DetectionManager/Scripts/BackendClient.cs`](Software/src/Unity-PassthroughCameraApiSamples/Assets/PassthroughCameraApiSamples/MultiObjectDetection/DetectionManager/Scripts/BackendClient.cs#L19) | 19 | `m_baseUrl` |
-| [`Software/src/esp_driver/src/main.cpp`](Software/src/esp_driver/src/main.cpp#L29) | 29 | `BACKEND` |
 | [`Software/src/web_app/main/script.js`](Software/src/web_app/main/script.js#L6) | 6 | `BACKEND_URL` |
 
-Then start the backend on all interfaces:
+> **Note:** The ESP32 now communicates via **BLE** (not WiFi), so it no longer needs an IP address or network config.
+
+Then start the backend and BLE bridge:
 ```bash
+# Terminal 1 — backend
 export OPENAI_API_KEY="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"
 export OPENAI_MODEL="gpt-5.4"
 export USE_LLM_PLANNER=1
 uvicorn backend:app --host 0.0.0.0 --port 8000 --reload
+
+# Terminal 2 — BLE bridge (connects to ESP32 over Bluetooth, forwards to backend)
+pip install bleak httpx   # first time only
+python ble_bridge.py
 ```
 
+
+## 4. Troubleshooting
+
+### Upload new ESP32 file
+```bash
+~/.platformio/penv/bin/pio run 2>&1 | tail -20
+```
+
+### ESP32 BLE not broadcasting / bridge can't find device
+1. **Press the physical RESET button** on the ESP32-S3 board. It will re-advertise as `NuChef-Dispenser` within a few seconds.
+2. If the bridge still can't find it, kill and restart `ble_bridge.py`. Linux's BlueZ stack sometimes caches stale BLE data.
+3. As a last resort, power-cycle the ESP32 (unplug & replug USB).
+
+### Serial port changed (`/dev/ttyACM0` ↔ `/dev/ttyACM1`)
+After a reset or replug the port may shift. Check with:
+```bash
+ls /dev/ttyACM*
+```
+Then update `upload_port` and `monitor_port` in `Software/src/esp_driver/platformio.ini` if you need to re-flash.
+
+### Permission denied on `/dev/ttyACM*`
+```bash
+sudo usermod -aG dialout $USER
+# then log out & back in (or reboot) for the group to take effect
+```
+
+### Bridge connects but dispense doesn't trigger from the UI
+- Make sure the backend (`uvicorn`) **and** `ble_bridge.py` are both running.
+- Verify `BACKEND_URL` in `script.js` is `window.location.origin` (not a hardcoded IP).
+- Check the bridge terminal for `BLE CMD →` and `write OK` logs when you click **Dispense**.
+
+### Quick sanity check (motor spin from CLI)
+```bash
+# Direct BLE test — bypasses the backend entirely
+python3 -c "
+import asyncio
+from bleak import BleakClient, BleakScanner
+SVC  = '4e7a9b1c-d203-4e2a-b8f1-67c1d9e3f5a0'
+CMD  = '4e7a9b1c-d203-4e2a-b8f1-67c1d9e3f5a1'
+async def test():
+    dev = await BleakScanner.find_device_by_name('NuChef-Dispenser', timeout=10)
+    async with BleakClient(dev) as c:
+        await c.write_gatt_char(CMD, b'spin', response=True)
+        await asyncio.sleep(5)
+        await c.write_gatt_char(CMD, b'stop', response=True)
+asyncio.run(test())
+"
+```
 
 # State Machine
 $$ IDLE \rightarrow SCANNING \rightarrow INGREDIENTS_CONFIRMED \rightarrow RECIPE_READY \rightarrow DISPENSING_STEP \rightarrow USER_COOK_STEP \rightarrow COMPLETE $$
