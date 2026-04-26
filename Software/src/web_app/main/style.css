@@ -496,3 +496,131 @@ ul li.empty {
     background: var(--border);
     border-radius: 3px;
 }
+
+/* ── Vision R&V Panel ──────────────────────────────────────────────────────── */
+
+#rv-panel {
+    margin: 24px 20px 32px;
+    padding: 20px 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+#rv-panel h2 {
+    font-size: 1rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent2);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.rv-dot {
+    font-size: 10px;
+    opacity: 1;
+    transition: opacity 0.3s;
+    color: var(--accent2);
+}
+
+.rv-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+}
+
+.rv-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+}
+
+.rv-card h3 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin-bottom: 10px;
+}
+
+.rv-card-wide { grid-column: span 2; }
+.rv-card-full { grid-column: 1 / -1; }
+
+.rv-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    font-family: "Fira Mono", "Consolas", monospace;
+}
+
+.rv-table td,
+.rv-table th {
+    padding: 3px 6px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+}
+
+.rv-table th {
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 0.75rem;
+}
+
+.rv-table td:first-child {
+    color: var(--muted);
+    white-space: nowrap;
+    width: 40%;
+}
+
+.rv-table td:last-child {
+    color: var(--text);
+    word-break: break-word;
+}
+
+.rv-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px;
+}
+
+.rv-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    font-family: "Fira Mono", monospace;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted);
+}
+
+.rv-badge.pass {
+    background: rgba(110, 231, 183, 0.12);
+    border-color: var(--accent2);
+    color: var(--accent2);
+}
+
+.rv-badge.fail {
+    background: rgba(255, 107, 107, 0.12);
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+.rv-input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    padding: 3px 8px;
+    font-size: 0.82rem;
+    font-family: "Fira Mono", monospace;
+}
+
+.rv-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}

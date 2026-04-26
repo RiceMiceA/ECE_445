@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import uuid
 import datetime
+import statistics
 from copy import deepcopy
 from pathlib import Path
 from typing import Literal, Optional
@@ -249,7 +251,22 @@ system_state: dict = {
     "planner_mode": "llm" if USE_LLM_PLANNER else "mock",
     "last_planner_status": None,
     "last_dispense_actual_grams": None,
+    # Vision R&V fields (TASK D)
+    "last_vision_frame": None,
+    "vision_frame_count": 0,
+    "vision_last_receive_ms": None,
+    # R&V event latency fields (TASK E) — internal sets kept out of state for JSON safety
+    "rv_event_count": 0,
+    "rv_duplicate_count": 0,
+    "rv_latency_p50_ms": None,
+    "rv_latency_p95_ms": None,
+    "rv_latency_max_ms": None,
+    "rv_last_event_id": None,
 }
+
+# Internal R&V tracking — not JSON-serialized directly into system_state
+_rv_events_seen: set[str] = set()  # deduplicate by event_id
+_rv_latency_ms: list[float] = []   # all measured latencies for percentile calc
 
 
 # ---------------------------------------------------------------------------
@@ -714,8 +731,29 @@ class ManualDispensePayload(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Endpoints — general
+# Models — Vision R&V  (TASK D / TASK E)
 # ---------------------------------------------------------------------------
+
+class VisionDetection(BaseModel):
+    label: str
+    class_id: Optional[int] = None
+    confidence: float
+    bbox_xywh: list[float]
+
+
+class VisionFramePayload(BaseModel):
+    frame_id: int
+    quest_send_ms: Optional[float] = None
+    inference_ms: Optional[float] = None
+    fps: Optional[float] = None
+    detections: list[VisionDetection]  # validated <= 20 in endpoint
+
+
+class RvEventPayload(BaseModel):
+    event_id: str
+    event_type: str
+    quest_send_ms: float
+    payload: Optional[dict] = None
 
 
 @app.get("/state")
@@ -727,6 +765,7 @@ def get_state():
 @app.post("/reset")
 def reset():
     """Reset system to idle. Clears all transient state."""
+    global _rv_events_seen, _rv_latency_ms
     system_state.update(
         {
             "demo_state": "idle",
@@ -742,8 +781,19 @@ def reset():
             "last_planner_status": None,
             "last_dispense_actual_grams": None,
             "dispense_baseline_weight": None,
+            "last_vision_frame": None,
+            "vision_frame_count": 0,
+            "vision_last_receive_ms": None,
+            "rv_event_count": 0,
+            "rv_duplicate_count": 0,
+            "rv_latency_p50_ms": None,
+            "rv_latency_p95_ms": None,
+            "rv_latency_max_ms": None,
+            "rv_last_event_id": None,
         }
     )
+    _rv_events_seen = set()
+    _rv_latency_ms = []
     return {"ok": True, "demo_state": "idle"}
 
 
@@ -1032,3 +1082,157 @@ def manual_dispense(payload: ManualDispensePayload):
     system_state["pending_command"] = command
     system_state["dispense_status"] = "dispensing"
     return {"ok": True, "command": command}
+
+
+# ---------------------------------------------------------------------------
+# Endpoints — Vision R&V  (TASK D: /vision_frame)
+# ---------------------------------------------------------------------------
+
+@app.post("/vision_frame")
+def post_vision_frame(payload: VisionFramePayload):
+    """
+    Quest posts full structured YOLO output each inference frame.
+    Validates detection cap (<= 20) and stores the frame in system_state
+    so it is visible in GET /state and GET /rv_state.
+
+    Optionally updates candidate_ingredients from detection labels so the
+    pipeline continues to work even if /candidate_ingredients is not posted
+    separately.
+    """
+    if len(payload.detections) > 20:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Too many detections: {len(payload.detections)} > 20 (R&V cap).",
+        )
+
+    now_ms = time.time() * 1000.0
+    frame_dict = payload.model_dump()
+    frame_dict["backend_receive_ms"] = now_ms
+
+    system_state["last_vision_frame"] = frame_dict
+    system_state["vision_frame_count"] = system_state.get("vision_frame_count", 0) + 1
+    system_state["vision_last_receive_ms"] = now_ms
+
+    # Optionally derive candidate_ingredients from detection labels
+    if payload.detections:
+        labels = list({d.label for d in payload.detections})
+        system_state["candidate_ingredients"] = _normalize_ingredients(labels)
+        if system_state["demo_state"] == "idle":
+            _set_state("scanning")
+
+    return {
+        "ok": True,
+        "num_detections": len(payload.detections),
+        "frame_id": payload.frame_id,
+        "vision_frame_count": system_state["vision_frame_count"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Endpoints — Vision R&V  (TASK E: /rv_event, GET /rv_state)
+# ---------------------------------------------------------------------------
+
+def _recompute_rv_latency_stats() -> None:
+    """Recompute p50/p95/max from the internal latency list and store in system_state."""
+    lats = _rv_latency_ms
+    if not lats:
+        system_state["rv_latency_p50_ms"] = None
+        system_state["rv_latency_p95_ms"] = None
+        system_state["rv_latency_max_ms"] = None
+        return
+    sorted_lats = sorted(lats)
+    n = len(sorted_lats)
+    system_state["rv_latency_p50_ms"] = round(statistics.median(sorted_lats), 2)
+    p95_idx = min(int(n * 0.95), n - 1)
+    system_state["rv_latency_p95_ms"] = round(sorted_lats[p95_idx], 2)
+    system_state["rv_latency_max_ms"] = round(sorted_lats[-1], 2)
+
+
+@app.post("/rv_event")
+def post_rv_event(payload: RvEventPayload):
+    """
+    Quest (or test script) posts time-stamped events for latency verification.
+
+    Payload must include quest_send_ms (epoch ms from sender side).
+    Backend computes end-to-end latency and returns a latency summary.
+
+    R&V requirement: p95 latency <= 150 ms at 10 events/sec for 60 seconds.
+    """
+    global _rv_events_seen, _rv_latency_ms
+
+    backend_receive_ms = time.time() * 1000.0
+    latency_ms = backend_receive_ms - payload.quest_send_ms
+
+    is_duplicate = payload.event_id in _rv_events_seen
+    if is_duplicate:
+        system_state["rv_duplicate_count"] = system_state.get("rv_duplicate_count", 0) + 1
+    else:
+        _rv_events_seen.add(payload.event_id)
+        _rv_latency_ms.append(latency_ms)
+        system_state["rv_event_count"] = system_state.get("rv_event_count", 0) + 1
+        system_state["rv_last_event_id"] = payload.event_id
+        _recompute_rv_latency_stats()
+
+    return {
+        "ok": True,
+        "event_id": payload.event_id,
+        "latency_ms": round(latency_ms, 2),
+        "is_duplicate": is_duplicate,
+        "event_count": system_state["rv_event_count"],
+        "p50_ms": system_state["rv_latency_p50_ms"],
+        "p95_ms": system_state["rv_latency_p95_ms"],
+        "max_ms": system_state["rv_latency_max_ms"],
+    }
+
+
+@app.get("/rv_state")
+def get_rv_state():
+    """
+    Compact verification summary for the laptop/dashboard R&V panel.
+
+    Returns the current vision frame, latency statistics, candidate/confirmed
+    ingredients, demo state, and PASS/FAIL flags for each R&V requirement.
+    """
+    p95 = system_state["rv_latency_p95_ms"]
+    evt_count = system_state["rv_event_count"]
+    dup_count = system_state["rv_duplicate_count"]
+    det_count = (
+        len(system_state["last_vision_frame"]["detections"])
+        if system_state.get("last_vision_frame")
+        else None
+    )
+
+    step = _current_step()
+    step_summary = None
+    if step:
+        step_summary = {
+            "step_id":   step.get("step_id"),
+            "index":     system_state["current_step_index"],
+            "action":    step.get("action"),
+            "display":   step.get("display_text"),
+        }
+
+    return {
+        # Vision inference
+        "last_vision_frame":    system_state.get("last_vision_frame"),
+        "vision_frame_count":   system_state["vision_frame_count"],
+        "vision_last_receive_ms": system_state["vision_last_receive_ms"],
+        # Latency
+        "rv_event_count":    evt_count,
+        "rv_duplicate_count": dup_count,
+        "rv_latency_p50_ms": system_state["rv_latency_p50_ms"],
+        "rv_latency_p95_ms": p95,
+        "rv_latency_max_ms": system_state["rv_latency_max_ms"],
+        # Planner / ingredients
+        "demo_state":              system_state["demo_state"],
+        "candidate_ingredients":   system_state["candidate_ingredients"],
+        "confirmed_ingredients":   system_state["confirmed_ingredients"],
+        "current_step":            step_summary,
+        # Connection health (updated by /status_update from BLE bridge)
+        "weight":               system_state["weight"],
+        "dispense_status":      system_state["dispense_status"],
+        # PASS / FAIL flags  (None = not enough data yet → shown as "—" in dashboard)
+        "pass_detection_cap":   (det_count is None or det_count <= 20) if True else None,
+        "pass_latency_p95":     (p95 <= 150.0) if p95 is not None else None,
+        "pass_no_dropped":      (dup_count == 0) if evt_count > 0 else None,
+    }

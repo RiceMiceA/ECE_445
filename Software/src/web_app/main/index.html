@@ -112,6 +112,82 @@
 
     </main>
 
+    <!-- ── Vision R&V Panel ─────────────────────────────────────────────── -->
+    <section id="rv-panel" class="rv-panel">
+        <h2>Vision R&amp;V HUD
+            <span id="rv-poll-dot" class="rv-dot">●</span>
+        </h2>
+
+        <div class="rv-grid">
+
+            <!-- Live inference -->
+            <div class="rv-card">
+                <h3>Live Inference</h3>
+                <table class="rv-table" id="rv-inference-table">
+                    <tr><td>Frame</td>     <td id="rv-frame-id">—</td></tr>
+                    <tr><td>FPS</td>       <td id="rv-fps">—</td></tr>
+                    <tr><td>Infer ms</td>  <td id="rv-infer-ms">—</td></tr>
+                    <tr><td>Detections</td><td id="rv-det-count">—</td></tr>
+                    <tr><td>Frames recv</td><td id="rv-frame-count">—</td></tr>
+                </table>
+            </div>
+
+            <!-- Current detections -->
+            <div class="rv-card rv-card-wide">
+                <h3>Current Detections</h3>
+                <table class="rv-table" id="rv-det-table">
+                    <thead><tr><th>#</th><th>Label</th><th>Conf</th><th>BBox xywh</th></tr></thead>
+                    <tbody id="rv-det-body"><tr><td colspan="4" class="empty">—</td></tr></tbody>
+                </table>
+            </div>
+
+            <!-- Planner interface -->
+            <div class="rv-card">
+                <h3>Planner Interface</h3>
+                <table class="rv-table">
+                    <tr><td>State</td>      <td id="rv-demo-state">—</td></tr>
+                    <tr><td>Candidates</td> <td id="rv-candidates">—</td></tr>
+                    <tr><td>Confirmed</td>  <td id="rv-confirmed">—</td></tr>
+                    <tr><td>Step</td>       <td id="rv-step">—</td></tr>
+                </table>
+            </div>
+
+            <!-- Communication / latency -->
+            <div class="rv-card">
+                <h3>Communication</h3>
+                <table class="rv-table">
+                    <tr><td>Events recv</td> <td id="rv-evt-count">—</td></tr>
+                    <tr><td>p50 latency</td> <td id="rv-p50">—</td></tr>
+                    <tr><td>p95 latency</td> <td id="rv-p95">—</td></tr>
+                    <tr><td>Max latency</td> <td id="rv-max">—</td></tr>
+                    <tr><td>Duplicates</td>  <td id="rv-dups">—</td></tr>
+                    <tr><td>Weight</td>      <td id="rv-weight">—</td></tr>
+                </table>
+            </div>
+
+            <!-- PASS / FAIL badge row -->
+            <div class="rv-card rv-card-full rv-badges">
+                <span id="rv-badge-det"   class="rv-badge">Det ≤ 20: —</span>
+                <span id="rv-badge-p95"   class="rv-badge">p95 ≤ 150 ms: —</span>
+                <span id="rv-badge-drops" class="rv-badge">No drops: —</span>
+            </div>
+
+            <!-- Offline validation (manual entry) -->
+            <div class="rv-card rv-card-full">
+                <h3>Offline Validation (manual entry)</h3>
+                <table class="rv-table">
+                    <tr><td>mAP@0.5:0.95</td>
+                        <td><input id="rv-map" class="rv-input" placeholder="0.___" size="8"/> ≥ 0.425 target</td></tr>
+                    <tr><td>Top-1 accuracy</td>
+                        <td><input id="rv-top1" class="rv-input" placeholder="__ %" size="8"/> ≥ 70 % target</td></tr>
+                    <tr><td>Confusion matrix</td>
+                        <td><input id="rv-cm-path" class="rv-input" placeholder="results/confusion_matrix.png" size="40"/></td></tr>
+                </table>
+            </div>
+
+        </div><!-- .rv-grid -->
+    </section>
+
     <footer>
         <span id="poll-indicator">●</span> Polling backend every 2 s
         &nbsp;|&nbsp; <span id="last-error" class="error-text"></span>

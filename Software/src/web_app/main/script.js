@@ -295,3 +295,94 @@ async function poll() {
 
 poll(); // immediate first fetch
 setInterval(poll, POLL_MS);
+
+// ── Vision R&V HUD polling (every 500 ms) ─────────────────────────────────────
+
+const RV_POLL_MS = 500;
+let rvPollDotOn = true;
+
+function passClass(flag) {
+    if (flag === null || flag === undefined) return "";
+    return flag ? "pass" : "fail";
+}
+function passLabel(flag, label) {
+    if (flag === null || flag === undefined) return label + ": —";
+    return label + ": " + (flag ? "PASS ✓" : "FAIL ✗");
+}
+function fmtMs(v) {
+    return v != null ? v.toFixed(1) + " ms" : "—";
+}
+
+function renderRvState(rv) {
+    // Last vision frame
+    const lf = rv.last_vision_frame;
+    if (lf) {
+        document.getElementById("rv-frame-id").textContent    = lf.frame_id ?? "—";
+        document.getElementById("rv-fps").textContent         = lf.fps != null ? lf.fps.toFixed(1) : "—";
+        document.getElementById("rv-infer-ms").textContent    = lf.inference_ms != null ? lf.inference_ms.toFixed(0) + " ms" : "—";
+        const dets = lf.detections || [];
+        const capPass = dets.length <= 20;
+        document.getElementById("rv-det-count").textContent   = dets.length + " / 20" + (capPass ? " ✓" : " ✗");
+        document.getElementById("rv-det-count").style.color   = capPass ? "var(--accent2)" : "var(--danger)";
+
+        // Detection table
+        const tbody = document.getElementById("rv-det-body");
+        if (dets.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty">—</td></tr>';
+        } else {
+            tbody.innerHTML = dets.map((d, i) => {
+                const bb = d.bbox_xywh ? d.bbox_xywh.map(v => Math.round(v)).join(", ") : "—";
+                return `<tr>
+                    <td>${i + 1}</td>
+                    <td>${d.label}</td>
+                    <td>${d.confidence.toFixed(2)}</td>
+                    <td>[${bb}]</td>
+                </tr>`;
+            }).join("");
+        }
+    }
+    document.getElementById("rv-frame-count").textContent = rv.vision_frame_count ?? "—";
+
+    // Planner
+    document.getElementById("rv-demo-state").textContent  = rv.demo_state || "—";
+    document.getElementById("rv-candidates").textContent  =
+        rv.candidate_ingredients?.length ? rv.candidate_ingredients.join(", ") : "(none)";
+    document.getElementById("rv-confirmed").textContent   =
+        rv.confirmed_ingredients?.length ? rv.confirmed_ingredients.join(", ") : "(none)";
+    const step = rv.current_step;
+    document.getElementById("rv-step").textContent = step
+        ? `[${step.index}] ${step.action} — ${step.display || ""}` : "—";
+
+    // Comm / latency
+    document.getElementById("rv-evt-count").textContent = rv.rv_event_count ?? "—";
+    document.getElementById("rv-p50").textContent        = fmtMs(rv.rv_latency_p50_ms);
+    document.getElementById("rv-p95").textContent        = fmtMs(rv.rv_latency_p95_ms);
+    document.getElementById("rv-max").textContent        = fmtMs(rv.rv_latency_max_ms);
+    document.getElementById("rv-dups").textContent       = rv.rv_duplicate_count ?? "—";
+    document.getElementById("rv-weight").textContent     =
+        rv.weight != null ? rv.weight.toFixed(2) + " g" : "—";
+
+    // PASS/FAIL badges
+    function setBadge(id, flag, label) {
+        const el = document.getElementById(id);
+        el.textContent  = passLabel(flag, label);
+        el.className    = "rv-badge " + passClass(flag);
+    }
+    setBadge("rv-badge-det",   rv.pass_detection_cap, "Det ≤ 20");
+    setBadge("rv-badge-p95",   rv.pass_latency_p95,   "p95 ≤ 150 ms");
+    setBadge("rv-badge-drops", rv.pass_no_dropped,    "No drops");
+}
+
+async function pollRv() {
+    try {
+        const rv = await api("/rv_state");
+        renderRvState(rv);
+        rvPollDotOn = !rvPollDotOn;
+        document.getElementById("rv-poll-dot").style.opacity = rvPollDotOn ? "1" : "0.3";
+    } catch (e) {
+        console.warn("RV poll error:", e.message);
+    }
+}
+
+pollRv();
+setInterval(pollRv, RV_POLL_MS);
