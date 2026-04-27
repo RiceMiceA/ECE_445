@@ -71,6 +71,7 @@ VALID_STATES = {
     "idle",
     "scanning",
     "ingredients_confirmed",
+    "ingredient_review",
     "recipe_ready",
     "dispensing_step",
     "user_cook_step",
@@ -98,6 +99,9 @@ Hard rules:
 - Prefer one-pan or one-bowl recipes.
 - If can_generate is true, return 4 to 8 total steps.
 - Use at most 3 season/dispense steps (action="season").
+- Use ingredient_summary count and total_weight_g to scale the portion size.
+- Use measured weights to choose seasoning grams. Larger total ingredient mass should receive more seasoning, but each dispense amount must stay within 0.2 to 4.0 grams.
+- If some weights are missing, use conservative seasoning and do not invent ingredients.
 - Each step must be ATOMIC: one step = one main action.
 - display_text and voice_text must be one short sentence that fits in AR.
 - For season steps (action="season"), include a dispense object with spice + grams.
@@ -236,6 +240,10 @@ system_state: dict = {
     "demo_state": "idle",
     "candidate_ingredients": [],
     "confirmed_ingredients": [],
+    "ingredient_instances": [],
+    "ingredient_review_index": 0,
+    "ingredient_review_complete": False,
+    "last_recorded_weight_g": None,
     "recipe": None,
     "current_step_index": -1,
     "container_positions": deepcopy(CONTAINER_POSITIONS),
@@ -308,6 +316,64 @@ def _normalize_ingredients(ingredients: list[str]) -> list[str]:
             cleaned.append(value)
             seen.add(value)
     return cleaned
+
+
+def _normalize_label(value: str) -> str:
+    return " ".join(value.strip().lower().replace("_", " ").split())
+
+
+def _build_ingredient_instances(raw_ingredients: list[str]) -> list[dict]:
+    labels = [_normalize_label(x) for x in raw_ingredients]
+    labels = [x for x in labels if x]
+
+    totals: dict[str, int] = {}
+    for label in labels:
+        totals[label] = totals.get(label, 0) + 1
+
+    seen: dict[str, int] = {}
+    instances: list[dict] = []
+    for label in labels:
+        seen[label] = seen.get(label, 0) + 1
+        idx = seen[label]
+        total = totals[label]
+        safe = label.replace(" ", "_")
+        instances.append({
+            "id": f"{safe}_{idx}",
+            "label": label,
+            "display_name": f"{label} {idx}/{total}" if total > 1 else label,
+            "instance_index": idx,
+            "count_for_label": total,
+            "weight_g": None,
+        })
+    return instances
+
+
+def _summarize_ingredient_instances(instances: list[dict]) -> list[dict]:
+    by_label: dict[str, dict] = {}
+    for item in instances:
+        label = item["label"]
+        entry = by_label.setdefault(label, {
+            "label": label,
+            "count": 0,
+            "measured_count": 0,
+            "total_weight_g": 0.0,
+            "average_weight_g": None,
+        })
+        entry["count"] += 1
+        if item.get("weight_g") is not None:
+            entry["measured_count"] += 1
+            entry["total_weight_g"] += float(item["weight_g"])
+
+    out: list[dict] = []
+    for entry in by_label.values():
+        if entry["measured_count"] > 0:
+            entry["total_weight_g"] = round(entry["total_weight_g"], 1)
+            entry["average_weight_g"] = round(entry["total_weight_g"] / entry["measured_count"], 1)
+        else:
+            entry["total_weight_g"] = None
+            entry["average_weight_g"] = None
+        out.append(entry)
+    return out
 
 
 def _make_step_id(index: int) -> str:
@@ -435,6 +501,19 @@ def _generate_mock_recipe(ingredients: list[str]) -> dict:
     Returns fully enriched steps with semantic fields, step_id, and render_plan.
     """
     ing_label = ingredients[0] if ingredients else "ingredient"
+
+    # Scale seasoning from measured ingredient weights.
+    total_food_g = 0.0
+    for item in system_state.get("ingredient_instances", []):
+        if item.get("weight_g") is not None:
+            total_food_g += float(item["weight_g"])
+    if total_food_g <= 0:
+        salt_g = 1.0
+        pepper_g = 0.5
+    else:
+        salt_g = min(4.0, max(0.2, round(total_food_g * 0.008, 1)))
+        pepper_g = min(2.0, max(0.2, round(total_food_g * 0.002, 1)))
+
     raw_steps = [
         {
             "index": 0,
@@ -467,7 +546,7 @@ def _generate_mock_recipe(ingredients: list[str]) -> dict:
             "destination": None,
             "completion_mode": "dispense_done",
             "duration_s": None,
-            "dispense": {"spice": "salt", "grams": 3.0},
+            "dispense": {"spice": "salt", "grams": salt_g},
         },
         {
             "index": 3,
@@ -478,7 +557,7 @@ def _generate_mock_recipe(ingredients: list[str]) -> dict:
             "destination": None,
             "completion_mode": "dispense_done",
             "duration_s": None,
-            "dispense": {"spice": "black pepper", "grams": 1.5},
+            "dispense": {"spice": "black pepper", "grams": pepper_g},
         },
         {
             "index": 4,
@@ -634,7 +713,7 @@ def _postprocess_recipe_plan(plan: RecipePlan, confirmed_ingredients: list[str])
 
 
 # Actual calling openai api.
-def _generate_llm_recipe(ingredients: list[str]) -> dict:
+def _generate_llm_recipe(ingredients: list[str], ingredient_instances: Optional[list[dict]] = None) -> dict:
     if not USE_LLM_PLANNER:
         system_state["last_planner_status"] = "llm_disabled_fallback_to_mock"
         return _generate_mock_recipe(ingredients)
@@ -647,8 +726,11 @@ def _generate_llm_recipe(ingredients: list[str]) -> dict:
         system_state["last_planner_status"] = "openai_model_missing_fallback_to_mock"
         return _generate_mock_recipe(ingredients)
 
+    instances = ingredient_instances or system_state.get("ingredient_instances", [])
     payload = {
         "confirmed_ingredients": ingredients,
+        "ingredient_instances": instances,
+        "ingredient_summary": _summarize_ingredient_instances(instances),
         "loaded_spices": system_state["containers"],
         "demo_goal": "short reliable classroom demo",
     }
@@ -699,6 +781,16 @@ class CandidatePayload(BaseModel):
 
 class ConfirmedPayload(BaseModel):
     ingredients: list[str]
+
+
+class ReviewIndexPayload(BaseModel):
+    index: int
+
+
+class RecordIngredientWeightPayload(BaseModel):
+    index: Optional[int] = None
+    ingredient_id: Optional[str] = None
+    weight_g: Optional[float] = None
 
 
 class GenerateRecipePayload(BaseModel):
@@ -771,6 +863,10 @@ def reset():
             "demo_state": "idle",
             "candidate_ingredients": [],
             "confirmed_ingredients": [],
+            "ingredient_instances": [],
+            "ingredient_review_index": 0,
+            "ingredient_review_complete": False,
+            "last_recorded_weight_g": None,
             "recipe": None,
             "current_step_index": -1,
             "dispense_status": "idle",
@@ -813,18 +909,127 @@ def candidate_ingredients(payload: CandidatePayload):
 
 @app.post("/ingredients_confirmed")
 def ingredients_confirmed(payload: ConfirmedPayload):
-    """Quest or dashboard locks in the ingredient list."""
-    confirmed = _normalize_ingredients(payload.ingredients)
-    if not confirmed:
+    """Quest or dashboard locks in the ingredient list. Builds ingredient instances preserving duplicates."""
+    instances = _build_ingredient_instances(payload.ingredients)
+    if not instances:
         raise HTTPException(status_code=400, detail="Ingredient list cannot be empty.")
-    system_state["confirmed_ingredients"] = confirmed
+
+    system_state["ingredient_instances"] = instances
+    system_state["ingredient_review_index"] = 0
+    system_state["ingredient_review_complete"] = False
+    system_state["last_recorded_weight_g"] = None
+
+    # Keep confirmed_ingredients as unique labels for legacy code/display.
+    seen: set[str] = set()
+    unique_labels: list[str] = []
+    for item in instances:
+        if item["label"] not in seen:
+            unique_labels.append(item["label"])
+            seen.add(item["label"])
+    system_state["confirmed_ingredients"] = unique_labels
     system_state["candidate_ingredients"] = []
+
     _set_state("ingredients_confirmed")
     return {
         "ok": True,
         "demo_state": system_state["demo_state"],
         "confirmed_ingredients": system_state["confirmed_ingredients"],
+        "ingredient_instances": system_state["ingredient_instances"],
     }
+
+
+@app.post("/start_ingredient_review")
+def start_ingredient_review():
+    """Transition to ingredient_review state. Quest calls this right after ingredients_confirmed."""
+    if not system_state.get("ingredient_instances"):
+        raise HTTPException(status_code=400, detail="No confirmed ingredient instances.")
+    system_state["ingredient_review_index"] = 0
+    system_state["ingredient_review_complete"] = False
+    _set_state("ingredient_review")
+    return get_ingredient_review()
+
+
+@app.get("/ingredient_review")
+def get_ingredient_review():
+    """Return current ingredient review state including live weight."""
+    instances = system_state.get("ingredient_instances", [])
+    total = len(instances)
+    idx = system_state.get("ingredient_review_index", 0)
+    if total == 0:
+        current = None
+        idx = -1
+    else:
+        idx = max(0, min(idx, total - 1))
+        system_state["ingredient_review_index"] = idx
+        current = instances[idx]
+
+    all_complete = total > 0 and all(x.get("weight_g") is not None for x in instances)
+    system_state["ingredient_review_complete"] = all_complete
+
+    return {
+        "demo_state": system_state["demo_state"],
+        "review_index": idx,
+        "total": total,
+        "current": current,
+        "ingredients": instances,
+        "ingredient_summary": _summarize_ingredient_instances(instances),
+        "live_weight_g": system_state.get("weight", 0.0),
+        "all_complete": all_complete,
+    }
+
+
+@app.post("/ingredient_review_index")
+def ingredient_review_index(payload: ReviewIndexPayload):
+    """Move the review cursor to the given index (X/Y navigation from Quest)."""
+    instances = system_state.get("ingredient_instances", [])
+    if not instances:
+        raise HTTPException(status_code=400, detail="No ingredient instances to review.")
+    if payload.index < 0 or payload.index >= len(instances):
+        raise HTTPException(status_code=400, detail="Review index out of range.")
+    system_state["ingredient_review_index"] = payload.index
+    _set_state("ingredient_review")
+    return get_ingredient_review()
+
+
+@app.post("/record_ingredient_weight")
+def record_ingredient_weight(payload: RecordIngredientWeightPayload):
+    """Record the current live scale weight for an ingredient instance (A button on Quest)."""
+    instances = system_state.get("ingredient_instances", [])
+    if not instances:
+        raise HTTPException(status_code=400, detail="No ingredient instances to weigh.")
+
+    idx = payload.index
+    if payload.ingredient_id:
+        matches = [i for i, item in enumerate(instances) if item["id"] == payload.ingredient_id]
+        if not matches:
+            raise HTTPException(status_code=404, detail="ingredient_id not found.")
+        idx = matches[0]
+    if idx is None:
+        idx = system_state.get("ingredient_review_index", 0)
+    if idx < 0 or idx >= len(instances):
+        raise HTTPException(status_code=400, detail="Review index out of range.")
+
+    weight = payload.weight_g if payload.weight_g is not None else system_state.get("weight", 0.0)
+    weight = round(float(weight), 1)
+    if weight < 0:
+        raise HTTPException(status_code=400, detail="Weight cannot be negative.")
+
+    instances[idx]["weight_g"] = weight
+    system_state["last_recorded_weight_g"] = weight
+
+    # Auto-advance to next unmeasured item, if any.
+    next_idx = None
+    for i, item in enumerate(instances):
+        if item.get("weight_g") is None:
+            next_idx = i
+            break
+    if next_idx is None:
+        system_state["ingredient_review_complete"] = True
+    else:
+        system_state["ingredient_review_index"] = next_idx
+
+    _set_state("ingredient_review")
+    return get_ingredient_review()
 
 
 # ---------------------------------------------------------------------------
@@ -835,6 +1040,7 @@ def ingredients_confirmed(payload: ConfirmedPayload):
 @app.post("/generate_recipe")
 def generate_recipe(payload: GenerateRecipePayload):
     """Generate recipe from confirmed ingredients using LLM if enabled."""
+    instances = system_state.get("ingredient_instances", [])
     ingredients = _normalize_ingredients(payload.ingredients or system_state["confirmed_ingredients"])
     if not ingredients:
         raise HTTPException(
@@ -842,7 +1048,9 @@ def generate_recipe(payload: GenerateRecipePayload):
             detail="No confirmed ingredients. Call /ingredients_confirmed first.",
         )
 
-    recipe = _generate_llm_recipe(ingredients)
+    recipe = _generate_llm_recipe(ingredients, instances)
+    recipe["ingredient_instances"] = deepcopy(instances)
+    recipe["ingredient_summary"] = _summarize_ingredient_instances(instances)
     system_state["recipe"] = recipe
     system_state["current_step_index"] = 0
     _set_state("recipe_ready")
@@ -956,6 +1164,17 @@ def dispense_step():
     system_state["dispense_status"] = "dispensing"
     _set_state("dispensing_step")
 
+    return {"ok": True, "command": command}
+
+
+@app.post("/tare")
+def tare():
+    """Queue a tare command so the ESP32 zeroes the load cell."""
+    command = {
+        "command_id": _make_command_id(),
+        "action": "tare",
+    }
+    system_state["pending_command"] = command
     return {"ok": True, "command": command}
 
 

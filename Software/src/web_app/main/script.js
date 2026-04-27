@@ -343,6 +343,17 @@ function renderRvState(rv) {
     }
     document.getElementById("rv-frame-count").textContent = rv.vision_frame_count ?? "—";
 
+    // Staleness indicator — color-codes how fresh the last frame is.
+    const staleEl = document.getElementById("rv-staleness");
+    if (rv.vision_last_receive_ms) {
+        const ageS = (Date.now() - rv.vision_last_receive_ms) / 1000;
+        staleEl.textContent = ageS < 1 ? "<1 s ago" : ageS.toFixed(1) + " s ago";
+        staleEl.style.color = ageS < 2 ? "var(--accent2)" : ageS < 5 ? "#f5a623" : "var(--danger)";
+    } else {
+        staleEl.textContent = "—";
+        staleEl.style.color = "inherit";
+    }
+
     // Planner
     document.getElementById("rv-demo-state").textContent  = rv.demo_state || "—";
     document.getElementById("rv-candidates").textContent  =
