@@ -110,8 +110,12 @@ Hard rules:
 - Prefer one-pan or one-bowl recipes.
 - If can_generate is true, return 4 to 8 total steps.
 - Use at most 3 season/dispense steps (action="season").
-- Use ingredient_summary count and total_weight_g to scale the portion size.
+- ingredient_summary is a list of objects, one per unique ingredient label.
+  Each has: count (number of physical items detected and marked), total_weight_g (sum of all weighed instances), average_weight_g.
+  Use count to understand portion size (e.g. count=3 means the user has 3 eggs).
+  Use total_weight_g / average_weight_g to scale seasoning correctly.
 - Use measured weights to choose seasoning grams. Larger total ingredient mass should receive more seasoning.
+- When writing display_text and voice_text for grab/move steps, mention the count if count > 1 (e.g. "Pick up all 3 eggs").
 - Each dispense amount must equal a whole number of rotations: salt 1.1 g, msg 0.7 g, chili pepper 0.27 g per rotation (max 3 rotations each, min 1).
 - If some weights are missing, use 1 rotation per spice and do not invent ingredients.
 - Each step must be ATOMIC: one step = one main action.

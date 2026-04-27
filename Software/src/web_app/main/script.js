@@ -54,8 +54,8 @@ function renderState(state) {
     // Candidates
     renderList("candidate-list", state.candidate_ingredients, "None detected");
 
-    // Confirmed
-    renderList("confirmed-list", state.confirmed_ingredients, "None confirmed");
+    // Confirmed — show per-label counts from ingredient_instances (accumulates markers).
+    renderConfirmedList("confirmed-list", state.ingredient_instances, state.confirmed_ingredients);
 
     // Weight (pulse when value changes)
     const wEl = document.getElementById("weight-display");
@@ -120,6 +120,40 @@ function renderList(id, items, emptyMsg) {
     } else {
         ul.innerHTML = items.map((i) => `<li>${i}</li>`).join("");
     }
+}
+
+/**
+ * Renders the confirmed ingredient list with per-label counts and average weights.
+ * Uses ingredient_instances (array of {label, weight_g, is_measured, display_name})
+ * which preserves duplicates. Falls back to plain confirmed_ingredients if instances
+ * is empty (e.g. before X is pressed).
+ */
+function renderConfirmedList(id, instances, fallbackLabels) {
+    const ul = document.getElementById(id);
+    if (!instances || instances.length === 0) {
+        if (!fallbackLabels || fallbackLabels.length === 0) {
+            ul.innerHTML = `<li class="empty">None confirmed</li>`;
+        } else {
+            ul.innerHTML = fallbackLabels.map((l) => `<li>${l}</li>`).join("");
+        }
+        return;
+    }
+    // Tally per-label counts and total measured weight.
+    const map = new Map(); // label -> {count, measured, totalW}
+    for (const inst of instances) {
+        const label = inst.label || inst;
+        if (!map.has(label)) map.set(label, { count: 0, measured: 0, totalW: 0 });
+        const e = map.get(label);
+        e.count++;
+        if (inst.is_measured) { e.measured++; e.totalW += inst.weight_g || 0; }
+    }
+    ul.innerHTML = [...map.entries()].map(([label, e]) => {
+        const countBadge = e.count > 1
+            ? `<span class="ing-count">×${e.count}</span>` : "";
+        const weightNote = e.measured > 0
+            ? `<span class="ing-weight">${(e.totalW / e.measured).toFixed(1)}g avg</span>` : "";
+        return `<li>${label}${countBadge}${weightNote}</li>`;
+    }).join("");
 }
 
 function renderContainers(containers, levels, positions) {

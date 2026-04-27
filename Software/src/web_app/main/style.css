@@ -243,6 +243,22 @@ ul li.empty {
     font-style: italic;
 }
 
+.ing-count {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--accent);
+    background: rgba(79, 142, 247, 0.15);
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-left: 6px;
+}
+
+.ing-weight {
+    font-size: 0.75rem;
+    color: var(--accent2);
+    margin-left: 5px;
+}
+
 /* ── Recipe ────────────────────────────────────────────────────────────────── */
 
 .recipe-name {
