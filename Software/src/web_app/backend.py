@@ -980,12 +980,17 @@ def get_ingredient_review():
     all_complete = total > 0 and all(x.get("weight_g") is not None for x in instances)
     system_state["ingredient_review_complete"] = all_complete
 
+    # Annotate each instance with is_measured so Unity can distinguish null from 0g.
+    annotated = [{**item, "is_measured": item.get("weight_g") is not None} for item in instances]
+    annotated_current = ({**current, "is_measured": current.get("weight_g") is not None}
+                         if current is not None else None)
+
     return {
         "demo_state": system_state["demo_state"],
         "review_index": idx,
         "total": total,
-        "current": current,
-        "ingredients": instances,
+        "current": annotated_current,
+        "ingredients": annotated,
         "ingredient_summary": _summarize_ingredient_instances(instances),
         "live_weight_g": system_state.get("weight", 0.0),
         "all_complete": all_complete,
