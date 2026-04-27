@@ -466,6 +466,38 @@ ul li.empty {
     padding: 8px;
 }
 
+/* ── Motor calibration ────────────────────────────────────────────────────── */
+
+.motor-calib-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.motor-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.motor-label {
+    min-width: 110px;
+    font-size: 0.85rem;
+    color: var(--text-muted, #aaa);
+}
+
+.motor-steps-input {
+    width: 64px;
+    padding: 4px 6px;
+    background: var(--bg2, #1e1e2e);
+    border: 1px solid var(--border, #444);
+    border-radius: 4px;
+    color: inherit;
+    font-size: 0.85rem;
+    text-align: center;
+}
+
 /* ── Misc ──────────────────────────────────────────────────────────────────── */
 
 .hidden {

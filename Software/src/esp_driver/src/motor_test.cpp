@@ -90,21 +90,12 @@ void setup()
 
     // Start first move
     stepper.setCurrentPosition(0);
-    stepper.moveTo(200);
-    Serial.println("Moving to 200 steps...");
+    stepper.moveTo(100);
+    Serial.println("Moving to 100 steps...");
 }
 
 
 void loop()
 {
     stepper.run();
-
-    // When target reached, reverse
-    if (stepper.distanceToGo() == 0)
-    {
-        long newTarget = -stepper.currentPosition();
-        Serial.printf("Reached target. Reversing → %ld\n", newTarget);
-        stepper.moveTo(newTarget);
-        delay(500);
-    }
 }

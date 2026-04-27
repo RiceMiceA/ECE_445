@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Literal, Optional
 
 # Auto-load .env file (OPENAI_API_KEY, OPENAI_MODEL, USE_LLM_PLANNER)
-_env_path = Path(__file__).resolve().parent / ".env"
+_env_path = Path(__file__).resolve().parent / ".env" 
 if _env_path.exists():
     for _line in _env_path.read_text().splitlines():
         _line = _line.strip()
@@ -64,8 +64,15 @@ app.mount("/ui", StaticFiles(directory="main", html=True), name="frontend")
 # ---------------------------------------------------------------------------
 
 CONTAINER_POSITIONS: list[str] = ["left", "middle", "right"]
-CONTAINERS: list[str] = ["salt", "black pepper", "garlic powder"]
+CONTAINERS: list[str] = ["salt", "msg", "chili pepper"]
 VALID_CONTAINER_SET = set(CONTAINERS)
+
+# Measured grams dispensed per one full motor rotation (1 cycle = fwd + back)
+GRAMS_PER_ROTATION: dict[str, float] = {
+    "salt":         1.1,
+    "msg":          0.7,
+    "chili pepper": 0.27,
+}
 
 VALID_STATES = {
     "idle",
@@ -95,13 +102,18 @@ Generate one short, practical, impressive recipe plan for a classroom demo.
 Hard rules:
 - Use only the confirmed ingredients supplied in the input.
 - Use only the loaded spices supplied in the input.
-- The only supported spices are salt, black pepper, garlic powder.
+- The only supported spices are salt, msg, chili pepper.
+- Each dispense amount must be a whole-rotation multiple of the measured yield:
+    salt = 1.1 g/rotation, msg = 0.7 g/rotation, chili pepper = 0.27 g/rotation.
+  Use exactly 1, 2, or 3 rotations per spice (never fractional). Choose the number
+  of rotations that best suits the ingredient mass.
 - Prefer one-pan or one-bowl recipes.
 - If can_generate is true, return 4 to 8 total steps.
 - Use at most 3 season/dispense steps (action="season").
 - Use ingredient_summary count and total_weight_g to scale the portion size.
-- Use measured weights to choose seasoning grams. Larger total ingredient mass should receive more seasoning, but each dispense amount must stay within 0.2 to 4.0 grams.
-- If some weights are missing, use conservative seasoning and do not invent ingredients.
+- Use measured weights to choose seasoning grams. Larger total ingredient mass should receive more seasoning.
+- Each dispense amount must equal a whole number of rotations: salt 1.1 g, msg 0.7 g, chili pepper 0.27 g per rotation (max 3 rotations each, min 1).
+- If some weights are missing, use 1 rotation per spice and do not invent ingredients.
 - Each step must be ATOMIC: one step = one main action.
 - display_text and voice_text must be one short sentence that fits in AR.
 - For season steps (action="season"), include a dispense object with spice + grams.
@@ -214,7 +226,7 @@ RECIPE_PLAN_SCHEMA = {
                                 "properties": {
                                     "spice": {
                                         "type": "string",
-                                        "enum": ["salt", "black pepper", "garlic powder"],
+                                        "enum": ["salt", "msg", "chili pepper"],
                                     },
                                     "grams": {
                                         "type": "number",
@@ -508,11 +520,13 @@ def _generate_mock_recipe(ingredients: list[str]) -> dict:
         if item.get("weight_g") is not None:
             total_food_g += float(item["weight_g"])
     if total_food_g <= 0:
-        salt_g = 1.0
-        pepper_g = 0.5
+        salt_g   = round(1 * GRAMS_PER_ROTATION["salt"], 2)       # 1 rotation
+        msg_g    = round(1 * GRAMS_PER_ROTATION["msg"], 2)        # 1 rotation
     else:
-        salt_g = min(4.0, max(0.2, round(total_food_g * 0.008, 1)))
-        pepper_g = min(2.0, max(0.2, round(total_food_g * 0.002, 1)))
+        salt_rotations = min(3, max(1, round(total_food_g * 0.008 / GRAMS_PER_ROTATION["salt"])))
+        msg_rotations  = min(3, max(1, round(total_food_g * 0.002 / GRAMS_PER_ROTATION["msg"])))
+        salt_g = round(salt_rotations * GRAMS_PER_ROTATION["salt"], 2)
+        msg_g  = round(msg_rotations  * GRAMS_PER_ROTATION["msg"],  2)
 
     raw_steps = [
         {
@@ -550,14 +564,14 @@ def _generate_mock_recipe(ingredients: list[str]) -> dict:
         },
         {
             "index": 3,
-            "display_text": "Season with black pepper.",
-            "voice_text": "Season with black pepper.",
+            "display_text": "Season with MSG.",
+            "voice_text": "Season with MSG.",
             "action": "season",
             "targets": [{"selector": "label", "value": ing_label}],
             "destination": None,
             "completion_mode": "dispense_done",
             "duration_s": None,
-            "dispense": {"spice": "black pepper", "grams": pepper_g},
+            "dispense": {"spice": "msg", "grams": msg_g},
         },
         {
             "index": 4,
@@ -596,7 +610,7 @@ def _generate_mock_recipe(ingredients: list[str]) -> dict:
 
 # LLM recipe planner
 class DispenseSpec(BaseModel):
-    spice: Literal["salt", "black pepper", "garlic powder"]
+    spice: Literal["salt", "msg", "chili pepper"]
     grams: float = Field(ge=0.2, le=4.0)
 
     class Config:
@@ -1175,6 +1189,46 @@ def tare():
         "action": "tare",
     }
     system_state["pending_command"] = command
+    system_state["weight"] = 0.0
+    return {"ok": True, "command": command}
+
+
+class MotorStepPayload(BaseModel):
+    motor: int       # 0, 1, or 2
+    steps: int       # positive = forward, negative = reverse
+
+
+@app.post("/motor_step")
+def motor_step(payload: MotorStepPayload):
+    """
+    Queue a single manual calibration step for one stepper motor.
+    `steps` may be negative (reverse).  The ESP32 picks it up via GET /pending_command.
+    """
+    if payload.motor not in (0, 1, 2):
+        raise HTTPException(status_code=400, detail="motor must be 0, 1, or 2.")
+    if payload.steps == 0:
+        raise HTTPException(status_code=400, detail="steps must be non-zero.")
+    command = {
+        "command_id": _make_command_id(),
+        "action": "motor_step",
+        "motor": payload.motor,
+        "steps": payload.steps,
+    }
+    system_state["pending_command"] = command
+    return {"ok": True, "command": command}
+
+
+@app.post("/motor_reset_position")
+def motor_reset_position():
+    """
+    Queue a command telling the ESP32 to declare all stepper positions as zero
+    (home / reference position) without physically moving them.
+    """
+    command = {
+        "command_id": _make_command_id(),
+        "action": "motor_reset_position",
+    }
+    system_state["pending_command"] = command
     return {"ok": True, "command": command}
 
 
@@ -1206,6 +1260,12 @@ def command_result(payload: CommandResultPayload):
             system_state["last_error"] = f"Tare failed for cmd {payload.command_id}"
         return {"ok": True, "dispense_status": system_state["dispense_status"]}
 
+    # Motor calibration commands — harmless ack, don't touch dispense_status
+    if pending_action in ("motor_step", "motor_reset_position"):
+        if payload.status != "done":
+            system_state["last_error"] = f"Motor command failed for cmd {payload.command_id}"
+        return {"ok": True, "dispense_status": system_state["dispense_status"]}
+
     # Dispense result handling
     if payload.actual_grams is not None:
         system_state["last_dispense_actual_grams"] = payload.actual_grams
@@ -1223,18 +1283,6 @@ def command_result(payload: CommandResultPayload):
 # ---------------------------------------------------------------------------
 # Endpoints — hardware status
 # ---------------------------------------------------------------------------
-
-
-@app.post("/tare")
-def tare_scale():
-    """Send a tare command to the ESP32 load cell via BLE bridge."""
-    command = {
-        "command_id": _make_command_id(),
-        "action": "tare",
-    }
-    system_state["pending_command"] = command
-    system_state["weight"] = 0.0
-    return {"ok": True, "command": command}
 
 
 @app.post("/status_update")

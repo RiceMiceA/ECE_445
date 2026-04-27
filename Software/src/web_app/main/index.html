@@ -96,8 +96,8 @@
                 <div id="manual-controls" class="hidden">
                     <select id="manual-spice">
                         <option value="salt">salt</option>
-                        <option value="black pepper">black pepper</option>
-                        <option value="garlic powder">garlic powder</option>
+                        <option value="msg">msg</option>
+                        <option value="chili pepper">chili pepper</option>
                     </select>
                     <input type="number" id="manual-grams" placeholder="grams" min="0.1" step="0.1" />
                     <button id="btn-manual-dispense" class="btn primary">Dispense</button>
@@ -107,6 +107,31 @@
             <div class="sub-panel">
                 <h3>Pending ESP32 Command</h3>
                 <pre id="pending-command">none</pre>
+            </div>
+
+            <div class="sub-panel" id="motor-calib-panel">
+                <h3>Motor Calibration</h3>
+                <div class="motor-calib-rows">
+                    <div class="motor-row" data-motor="0">
+                        <span class="motor-label">Motor 0 (Left)</span>
+                        <button class="btn secondary motor-step-btn" data-motor="0" data-dir="-1">◀ −Step</button>
+                        <input type="number" class="motor-steps-input" id="motor-steps-0" value="10" min="1" max="1000" />
+                        <button class="btn secondary motor-step-btn" data-motor="0" data-dir="1">+Step ▶</button>
+                    </div>
+                    <div class="motor-row" data-motor="1">
+                        <span class="motor-label">Motor 1 (Mid)</span>
+                        <button class="btn secondary motor-step-btn" data-motor="1" data-dir="-1">◀ −Step</button>
+                        <input type="number" class="motor-steps-input" id="motor-steps-1" value="10" min="1" max="1000" />
+                        <button class="btn secondary motor-step-btn" data-motor="1" data-dir="1">+Step ▶</button>
+                    </div>
+                    <div class="motor-row" data-motor="2">
+                        <span class="motor-label">Motor 2 (Right)</span>
+                        <button class="btn secondary motor-step-btn" data-motor="2" data-dir="-1">◀ −Step</button>
+                        <input type="number" class="motor-steps-input" id="motor-steps-2" value="10" min="1" max="1000" />
+                        <button class="btn secondary motor-step-btn" data-motor="2" data-dir="1">+Step ▶</button>
+                    </div>
+                </div>
+                <button id="btn-motor-reset-pos" class="btn danger" style="margin-top:10px">Reset All Positions</button>
             </div>
         </section>
 

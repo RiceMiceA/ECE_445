@@ -7,6 +7,9 @@ const int LOADCELL_SCK_PIN = 1;
 
 HX711 scale;
 
+const uint8_t HX711_SAMPLES_PER_READ = 5;
+const unsigned long LOOP_DELAY_MS = 100;
+
 void setup() {
   Serial.begin(115200);
 
@@ -21,7 +24,7 @@ void setup() {
 void loop() {
 
   if (scale.is_ready()) {
-    float reading = scale.get_units(50);
+    float reading = scale.get_units(HX711_SAMPLES_PER_READ);
     if(abs(reading) <= 0.05){
         reading = 0.00;
     }
@@ -31,6 +34,6 @@ void loop() {
     Serial.println("HX711 not found.");
   }
 
-  delay(1000);
+  delay(LOOP_DELAY_MS);
   
 }

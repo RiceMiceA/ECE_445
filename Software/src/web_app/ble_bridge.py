@@ -126,7 +126,7 @@ async def run_bridge(device: BLEDevice) -> None:
                     cmd = r.json()
 
                     action = cmd.get("action")
-                    if action in ("dispense", "tare"):
+                    if action in ("dispense", "tare", "motor_step", "motor_reset_position"):
                         cmd_id = cmd.get("command_id")
 
                         # Don't re-send the same command

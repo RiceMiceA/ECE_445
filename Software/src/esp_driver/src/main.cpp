@@ -70,6 +70,16 @@ String  pendingCmdId;
 int     pendingContainerIdx = -1;
 float   pendingTargetGrams  = 0.0f;
 
+// Calibration step command
+volatile bool calibStepReady = false;
+String calibStepCmdId;
+int    calibMotorIdx = -1;
+long   calibSteps    = 0;
+
+// Reset-position command
+volatile bool calibResetReady = false;
+String calibResetCmdId;
+
 // ── Timing ────────────────────────────────────────────────────────────────────
 
 const unsigned long HEARTBEAT_MS = 2000; // ms between weight notifications
@@ -101,10 +111,21 @@ const char *MOTOR_SLOT_NAMES[3] = {"left", "middle", "right"};
 
 AccelStepper dispenseMotor(AccelStepper::FULL4WIRE, AIN1R, AIN2R, BIN1R, BIN2R);
 
+// ── Per-motor calibration: measured grams dispensed per one rotation cycle ────
+const float GRAMS_PER_ROTATION[3] = {1.1f, 0.7f, 0.27f};  // salt, msg, chili pepper
+
 const float MOTOR_MAX_SPEED    = 800.0f;  // from motor_test.cpp
 const float MOTOR_ACCELERATION = 200.0f;  // from motor_test.cpp
 const float STEPS_PER_GRAM     = 320.0f;          // CALIBRATE: steps / gram
-const unsigned long DISPENSE_TIMEOUT_MS = 15000;   // 15 s hard timeout
+const unsigned long DISPENSE_TIMEOUT_MS = 30000;   // 30 s hard timeout (covers multi-cycle)
+
+// ── Per-motor two-part cycle calibration ─────────────────────────────────────
+// Motors are manually calibrated to their zero (closed) position first.
+// Each dispense cycle rotates 180° forward then returns to 0°.
+// 200 full steps = 360° → 100 steps = 180°
+const long STEPS_180 = 100;   // forward leg: 0° → 180°
+                               // back leg:    180° → 0°  (same count, reverse dir)
+const unsigned long CYCLE_PAUSE_MS = 500;  // pause between forward and back leg
 
 
 // ── BLE Callbacks ─────────────────────────────────────────────────────────────
@@ -163,6 +184,26 @@ class CmdCharCallbacks : public BLECharacteristicCallbacks
       } else {
         Serial.println("HX711: tare requested but scale not ready.");
       }
+      return;
+    }
+
+    // ── motor_step — calibration nudge ──
+    if (strcmp(action, "motor_step") == 0) {
+      int  mIdx  = doc["motor"] | -1;
+      long steps = doc["steps"] | 0;
+      const char *id = doc["command_id"] | "";
+      if (mIdx < 0 || mIdx > 2 || steps == 0) return;
+      calibStepCmdId = String(id);
+      calibMotorIdx  = mIdx;
+      calibSteps     = steps;
+      calibStepReady = true;
+      return;
+    }
+
+    // ── motor_reset_position — zero all position counters ──
+    if (strcmp(action, "motor_reset_position") == 0) {
+      calibResetCmdId  = String(doc["command_id"] | "reset");
+      calibResetReady  = true;
       return;
     }
 
@@ -269,38 +310,55 @@ void runDispense(int containerIdx, float targetGrams, const String &commandId)
   Serial.printf("Dispensing %.2fg from %s motor (container %d)\n",
                 targetGrams, MOTOR_SLOT_NAMES[containerIdx], containerIdx);
 
+  // Compute how many full rotation cycles cover targetGrams, min 1.
+  float gPerRot  = GRAMS_PER_ROTATION[containerIdx];
+  int numCycles  = max(1, (int)roundf(targetGrams / gPerRot));
+  Serial.printf("Cycle: 0→%ld→0  grams/rot=%.2f  → %d cycle(s) for %.2fg\n",
+                STEPS_180, gPerRot, numCycles, targetGrams);
+
   float weightBefore = readWeightBlocking(500);
-  long stepsTarget = (long)(targetGrams * STEPS_PER_GRAM);
   bool timedOut = false;
-
-  dispenseMotor.setCurrentPosition(0);
-  dispenseMotor.moveTo(stepsTarget);
-
-  Serial.printf("Steps target: %ld, distanceToGo: %ld, maxSpeed: %.1f\n",
-                stepsTarget, dispenseMotor.distanceToGo(), dispenseMotor.maxSpeed());
-
   unsigned long startMs = millis();
 
-  // Keep stepping continuously (same style as motor_test.cpp).
-  // For now, do not stop early by weight; stop only by step target or timeout.
+  // Home position is 0 — motor was calibrated here before use.
+  dispenseMotor.setCurrentPosition(0);
 
-  // TONY CHANGE THIS LATER TO DO A SIMPLE PID CONTROL USING THE LOAD CELL AS INPUT.
-  while (dispenseMotor.distanceToGo() != 0)
+  for (int cycle = 0; cycle < numCycles && !timedOut; cycle++)
   {
-    dispenseMotor.run();
-
-    if (millis() - startMs > DISPENSE_TIMEOUT_MS)
+    // ── Leg 1: move to 180° (open) ────────────────────────────────────────
+    dispenseMotor.moveTo(STEPS_180);
+    while (dispenseMotor.distanceToGo() != 0)
     {
-      dispenseMotor.stop();
-      timedOut = true;
-      Serial.println("Dispense timed out.");
-      break;
+      dispenseMotor.run();
+      if (millis() - startMs > DISPENSE_TIMEOUT_MS)
+      {
+        dispenseMotor.stop();
+        timedOut = true;
+        Serial.println("Dispense timed out (open leg).");
+        break;
+      }
     }
-  }
 
-  while (dispenseMotor.isRunning())
-  {
-    dispenseMotor.run();
+    if (timedOut) break;
+
+    // ── Pause at open position ─────────────────────────────────────────────
+    delay(CYCLE_PAUSE_MS);
+
+    // ── Leg 2: return to 0° (home/closed) ─────────────────────────────────
+    dispenseMotor.moveTo(0);
+    while (dispenseMotor.distanceToGo() != 0)
+    {
+      dispenseMotor.run();
+      if (millis() - startMs > DISPENSE_TIMEOUT_MS)
+      {
+        dispenseMotor.stop();
+        timedOut = true;
+        Serial.println("Dispense timed out (close leg).");
+        break;
+      }
+    }
+
+    Serial.printf("  cycle %d/%d done\n", cycle + 1, numCycles);
   }
 
   disableAllMotors();
@@ -312,9 +370,7 @@ void runDispense(int containerIdx, float targetGrams, const String &commandId)
   const char *status = timedOut ? "error" : "done";
 
   Serial.printf("Dispense %s — actual %.2fg, weight %.2fg\n",
-                status,
-                actualGrams,
-                weightAfter);
+                status, actualGrams, weightAfter);
 
   notifyResult(commandId, status, actualGrams, weightAfter);
 }
@@ -423,7 +479,40 @@ void loop()
     notifyWeight(w);
   }
 
-  // Process pending dispense command (skip while a dispense is running)
+  // ── Process calibration step command ─────────────────────────────────────
+  if (!dispensing && calibStepReady)
+  {
+    calibStepReady = false;
+    int  mIdx  = calibMotorIdx;
+    long steps = calibSteps;
+    Serial.printf(">>> Calib step: motor=%d, steps=%ld\n", mIdx, steps);
+    selectMotor(mIdx);
+    dispenseMotor.setCurrentPosition(0);
+    dispenseMotor.moveTo(steps);
+    while (dispenseMotor.distanceToGo() != 0)
+      dispenseMotor.run();
+    while (dispenseMotor.isRunning())
+      dispenseMotor.run();
+    disableAllMotors();
+    Serial.println(">>> Calib step done.");
+    // Send result
+    if (deviceConnected) {
+      notifyResult(calibStepCmdId, "done", 0.0f, currentWeight);
+    }
+  }
+
+  // ── Process reset-position command ────────────────────────────────────────
+  if (!dispensing && calibResetReady)
+  {
+    calibResetReady = false;
+    dispenseMotor.setCurrentPosition(0);
+    Serial.println(">>> Motor positions reset to zero.");
+    if (deviceConnected) {
+      notifyResult(calibResetCmdId, "done", 0.0f, currentWeight);
+    }
+  }
+
+  // ── Process pending dispense command (skip while a dispense is running) ───
   if (!dispensing && commandReady)
   {
     commandReady = false;

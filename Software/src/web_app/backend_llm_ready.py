@@ -51,8 +51,15 @@ app.mount("/ui", StaticFiles(directory="main", html=True), name="frontend")
 # Constants — canonical spice names, fixed container layout
 # ---------------------------------------------------------------------------
 
-CONTAINERS: list[str] = ["salt", "black pepper", "garlic powder"]
+CONTAINERS: list[str] = ["salt", "msg", "chili pepper"]
 VALID_CONTAINER_SET = set(CONTAINERS)
+
+# Measured grams dispensed per one full motor rotation (1 cycle = fwd + back)
+GRAMS_PER_ROTATION: dict[str, float] = {
+    "salt":         1.1,
+    "msg":          0.7,
+    "chili pepper": 0.27,
+}
 
 VALID_STATES = {
     "idle",
@@ -81,13 +88,16 @@ Generate one short, practical, impressive recipe plan for a classroom demo.
 Hard rules:
 - Use only the confirmed ingredients supplied in the input.
 - Use only the loaded spices supplied in the input.
-- The only supported spices are salt, black pepper, garlic powder.
+- The only supported spices are salt, msg, chili pepper.
+- Each dispense amount must be a whole-rotation multiple of the measured yield:
+    salt = 1.1 g/rotation, msg = 0.7 g/rotation, chili pepper = 0.27 g/rotation.
+  Use exactly 1, 2, or 3 rotations per spice (never fractional).
 - Prefer one-pan or one-bowl recipes.
 - If can_generate is true, return 3 to 6 total steps.
 - Use at most 3 dispense steps.
 - Each instruction must be one short sentence that fits in AR.
 - For dispense steps, include a dispense object with spice + grams.
-- Each dispense amount must be between 0.2 and 4.0 grams.
+- Each dispense amount must equal a whole number of rotations: salt 1.1 g, msg 0.7 g, chili pepper 0.27 g per rotation (max 3 rotations each, min 1).
 - Never invent extra ingredients, sauces, oils, or garnishes.
 - Never output motor commands, PWM, timing pulses, step counts, or hardware details.
 - If the ingredient set is insufficient, set can_generate=false and return an empty steps list.
@@ -127,7 +137,7 @@ RECIPE_PLAN_SCHEMA = {
                                 "properties": {
                                     "spice": {
                                         "type": "string",
-                                        "enum": ["salt", "black pepper", "garlic powder"],
+                                        "enum": ["salt", "msg", "chili pepper"],
                                     },
                                     "grams": {
                                         "type": "number",
@@ -227,13 +237,13 @@ def _generate_mock_recipe(ingredients: list[str]) -> dict:
             "index": 1,
             "instruction": "Dispense salt into the bowl.",
             "type": "dispense",
-            "dispense": {"spice": "salt", "grams": 3.0},
+            "dispense": {"spice": "salt", "grams": 2.2},
         },
         {
             "index": 2,
-            "instruction": "Dispense black pepper into the bowl.",
+            "instruction": "Dispense MSG into the bowl.",
             "type": "dispense",
-            "dispense": {"spice": "black pepper", "grams": 1.5},
+            "dispense": {"spice": "msg", "grams": 1.4},
         },
         {
             "index": 3,
@@ -243,9 +253,9 @@ def _generate_mock_recipe(ingredients: list[str]) -> dict:
         },
         {
             "index": 4,
-            "instruction": "Dispense garlic powder before serving.",
+            "instruction": "Dispense chili pepper before serving.",
             "type": "dispense",
-            "dispense": {"spice": "garlic powder", "grams": 2.0},
+            "dispense": {"spice": "chili pepper", "grams": 0.54},
         },
     ]
     return {
@@ -256,7 +266,7 @@ def _generate_mock_recipe(ingredients: list[str]) -> dict:
 
 
 class DispenseSpec(BaseModel):
-    spice: Literal["salt", "black pepper", "garlic powder"]
+    spice: Literal["salt", "msg", "chili pepper"]
     grams: float = Field(ge=0.2, le=4.0)
 
     class Config:

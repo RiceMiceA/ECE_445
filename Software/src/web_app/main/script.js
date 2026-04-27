@@ -276,6 +276,32 @@ document.getElementById("btn-manual-dispense").addEventListener("click", async (
     }
 });
 
+// ── Motor calibration ───────────────────────────────────────────────────────
+
+document.querySelectorAll(".motor-step-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+        const motor = parseInt(btn.dataset.motor, 10);
+        const dir = parseInt(btn.dataset.dir, 10);
+        const stepsInput = document.getElementById(`motor-steps-${motor}`);
+        const steps = dir * Math.abs(parseInt(stepsInput.value, 10) || 10);
+        try {
+            await api("/motor_step", "POST", { motor, steps });
+            toast(`Motor ${motor}: ${steps > 0 ? "+" : ""}${steps} steps queued.`);
+        } catch (e) {
+            toast(e.message, true);
+        }
+    });
+});
+
+document.getElementById("btn-motor-reset-pos").addEventListener("click", async () => {
+    try {
+        await api("/motor_reset_position", "POST");
+        toast("Motor positions reset to zero.");
+    } catch (e) {
+        toast(e.message, true);
+    }
+});
+
 // ── Polling loop ──────────────────────────────────────────────────────────────
 
 let pollIndicatorOn = true;
