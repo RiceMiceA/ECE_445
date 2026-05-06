@@ -1,0 +1,18 @@
+========================================================
+NuChef Latency Burst Test — SUMMARY
+========================================================
+Backend         : http://localhost:8000
+Rate            : 10.0 Hz  for  30.0 s
+Actual elapsed  : 29.9 s
+
+Expected events : 300
+Received OK     : 300
+Dropped / error : 0
+
+p50 latency     : 2.5 ms
+p95 latency     : 3.4 ms   (threshold <= 150 ms)
+Max latency     : 4.1 ms
+
+PASS criteria   : p95 <= 150 ms  AND  dropped == 0
+RESULT          : PASS
+========================================================

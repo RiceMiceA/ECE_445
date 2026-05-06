@@ -396,10 +396,14 @@ ul li.empty {
 
 .level-bar {
     height: 100%;
-    background: var(--accent2);
+    background: #4caf50;
     border-radius: 4px;
-    transition: width 0.4s;
+    transition: width 0.5s, background 0.5s;
 }
+.level-bar.warn  { background: #f0a500; }
+.level-bar.crit  { background: #e53935; }
+.level-pct.warn  { color: #f0a500; }
+.level-pct.crit  { color: #e53935; font-weight: 700; }
 
 .level-pct {
     width: 36px;

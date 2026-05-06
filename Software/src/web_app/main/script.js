@@ -159,16 +159,20 @@ function renderConfirmedList(id, instances, fallbackLabels) {
 function renderContainers(containers, levels, positions) {
     const el = document.getElementById("containers-info");
     el.innerHTML = containers
-        .map(
-            (name, i) => `
+        .map((name, i) => {
+            const pct = levels[i] ?? 0;
+            const cls = pct < 20 ? "crit" : pct < 50 ? "warn" : "";
+            const label = pct < 0 ? "—" : `${pct}%`;
+            const icon  = pct < 20 ? " ⚠" : "";
+            return `
       <div class="container-row">
-                <span class="container-name">${positions[i]} · ${name}</span>
+        <span class="container-name">${positions[i]} · ${name}</span>
         <div class="level-bar-wrap">
-          <div class="level-bar" style="width:${levels[i] || 0}%"></div>
+          <div class="level-bar ${cls}" style="width:${Math.max(0,pct)}%"></div>
         </div>
-        <span class="level-pct">${levels[i] || 0}%</span>
-      </div>`
-        )
+        <span class="level-pct ${cls}">${label}${icon}</span>
+      </div>`;
+        })
         .join("");
 }
 

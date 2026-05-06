@@ -1032,8 +1032,8 @@ def record_ingredient_weight(payload: RecordIngredientWeightPayload):
     if idx < 0 or idx >= len(instances):
         raise HTTPException(status_code=400, detail="Review index out of range.")
 
-    weight = payload.weight_g if payload.weight_g is not None else system_state.get("weight", 0.0)
-    weight = round(float(weight), 1)
+    weight = payload.weight_g  if payload.weight_g is not None else system_state.get("weight", 0.0)
+    weight = round(float(weight), 1) * 2.937
     if weight < 0:
         raise HTTPException(status_code=400, detail="Weight cannot be negative.")
 

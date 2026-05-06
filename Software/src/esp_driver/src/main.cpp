@@ -32,6 +32,8 @@
 #include <BLE2902.h>
 #include <ArduinoJson.h>
 #include "HX711.h"
+#include <Wire.h>
+#include "Adafruit_VL53L0X.h"
 
 // ── BLE UUIDs ─────────────────────────────────────────────────────────────────
 
@@ -46,7 +48,7 @@ const char *BLE_DEVICE_NAME = "NuChef-Dispenser";
 
 const int LOADCELL_DOUT_PIN = 2;
 const int LOADCELL_SCK_PIN  = 1;
-const float HX711_SCALE_FACTOR = 1250.0f;  // (raw reading) / actual grams — calibrate!
+const float HX711_SCALE_FACTOR = float(1250.0f);  // (raw reading) / actual grams — calibrated 2026-04-29
 const float WEIGHT_ZERO_THRESHOLD = 0.05f; // readings below this → 0
 const unsigned long HX711_READY_TIMEOUT_MS = 3000;
 
@@ -82,9 +84,94 @@ String calibResetCmdId;
 
 // ── Timing ────────────────────────────────────────────────────────────────────
 
-const unsigned long HEARTBEAT_MS = 2000; // ms between weight notifications
-unsigned long lastHeartbeat = 0;
+const unsigned long HEARTBEAT_MS    = 2000;  // ms between weight notifications
+const unsigned long IR_HEARTBEAT_MS = 5000;  // ms between IR sensor sweeps
+unsigned long lastHeartbeat   = 0;
+unsigned long lastIrRead      = 0;
 bool dispensing = false;
+
+// ── IR distance sensors (VL53L0X × 3, one shared object, time-multiplexed I2C) ─
+// Left  → chili pepper  (SDA=35, SCL=36, empty=90mm, full=45mm)
+// Middle → MSG          (SDA=38, SCL=37, empty=111mm, full=80mm)
+// Right  → salt         (SDA=40, SCL=39, empty=90mm,  full=32mm)
+
+struct IrSensorConfig {
+  const char* name;
+  int         sda;
+  int         scl;
+  float       emptyMm;  // distance when container is empty
+  float       fullMm;   // distance when container is full
+};
+
+const IrSensorConfig IR_SENSORS[3] = {
+  {"left",   35, 36, 145.0f, 48.0f},   // chili pepper
+  {"middle", 38, 37, 134.0f, 42.0f},  // MSG (calibrated: 109.2mm→80%)
+  {"right",  40, 39,  144.0f,  45.0f},  // salt (calibrated: 66.2mm→85%)
+};
+
+Adafruit_VL53L0X irLox;   // single shared object — re-init each sensor
+int irLevels[3] = {-1, -1, -1};  // fill % (0-100), -1 = not yet read
+
+// Read one VL53L0X by switching the I2C bus to its pins.
+// Returns fill percentage 0-100, or -1 on failure.
+int readIrSensor(const IrSensorConfig& s)
+{
+  Wire.end();
+  delay(5);
+  Wire.begin(s.sda, s.scl);
+  Wire.setClock(100000);
+  delay(5);
+
+  if (!irLox.begin(0x29, false, &Wire)) {
+    Serial.printf("IR[%s]: VL53L0X init failed\n", s.name);
+    return -1;
+  }
+
+  const int SAMPLES   = 12;
+  const int MIN_VALID = 4;  // need at least this many good samples
+  float sum   = 0.0f;
+  int   valid = 0;
+
+  for (int i = 0; i < SAMPLES; i++) {
+    VL53L0X_RangingMeasurementData_t m;
+    irLox.rangingTest(&m, false);
+    if (m.RangeStatus != 4) {   // 4 = out-of-range
+      sum += m.RangeMilliMeter;
+      valid++;
+    }
+    delay(5);
+  }
+
+  if (valid < MIN_VALID) {
+    Serial.printf("IR[%s]: too many OOR readings\n", s.name);
+    return -1;
+  }
+
+  float reading = sum / valid;
+  float range   = s.fullMm - s.emptyMm;
+  float pct     = (range != 0.0f) ? (reading - s.emptyMm) / range : 0.0f;
+  // Clamp and snap near edges
+  if (pct <= 0.05f) pct = 0.0f;
+  if (pct >= 0.95f) pct = 1.0f;
+  int level = (int)(pct * 100.0f + 0.5f);
+  level = max(0, min(100, level));
+
+  Serial.printf("IR[%s]: %.1fmm → %d%%\n", s.name, reading, level);
+  return level;
+}
+
+void readAllIrSensors()
+{
+  for (int i = 0; i < 3; i++) {
+    int lvl = readIrSensor(IR_SENSORS[i]);
+    if (lvl >= 0) irLevels[i] = lvl;  // keep previous value on failure
+  }
+
+  // Print all spice levels together in backend container order.
+  // container 0 = salt (right sensor), 1 = msg (middle), 2 = chili pepper (left)
+  Serial.printf("Spice levels -> salt:%d%%  msg:%d%%  chili:%d%%\n",
+                irLevels[2], irLevels[1], irLevels[0]);
+}
 
 // ── Motors — TB6612 FULL4WIRE steppers ────────────────────────────────────────
 // All three spice augers share the same 4 phase lines.
@@ -250,6 +337,20 @@ void notifyWeight(float weight)
 
   JsonDocument doc;
   doc["weight"] = weight;
+
+  // Include IR fill levels when available so ble_bridge forwards them
+  // to /status_update → container_levels in the web dashboard.
+  // Backend CONTAINERS = ["salt", "msg", "chili pepper"] (indices 0,1,2).
+  // Physical IR mapping: left(0)=chili pepper, middle(1)=MSG, right(2)=salt.
+  // So reorder: container_levels[0]=salt=irLevels[2],
+  //             container_levels[1]=MSG=irLevels[1],
+  //             container_levels[2]=chili=irLevels[0].
+  if (irLevels[0] >= 0 || irLevels[1] >= 0 || irLevels[2] >= 0) {
+    auto arr = doc["container_levels"].to<JsonArray>();
+    arr.add(irLevels[2] >= 0 ? irLevels[2] : 100);  // salt (right sensor)
+    arr.add(irLevels[1] >= 0 ? irLevels[1] : 100);  // MSG  (middle sensor)
+    arr.add(irLevels[0] >= 0 ? irLevels[0] : 100);  // chili pepper (left sensor)
+  }
 
   String body;
   serializeJson(doc, body);
@@ -471,11 +572,19 @@ void loop()
     oldDeviceConnected = true;
   }
 
-  // Periodic weight heartbeat via BLE notify
+  // Periodic IR sensor sweep (skipped while dispensing to avoid I2C bus conflicts)
+  if (!dispensing && (now - lastIrRead >= IR_HEARTBEAT_MS))
+  {
+    lastIrRead = now;
+    readAllIrSensors();
+    
+  }
+
+  // Periodic weight heartbeat via BLE notify (includes latest IR levels)
   if (now - lastHeartbeat >= HEARTBEAT_MS)
   {
     lastHeartbeat = now;
-    float w = readWeight();
+    float w = readWeight() * 2.938f;  // convert back to grams for the backend (calibrated: 1g=2.937 raw)
     notifyWeight(w);
   }
 
