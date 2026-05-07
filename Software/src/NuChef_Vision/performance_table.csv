@@ -1,0 +1,3 @@
+Model Name,Dataset,Accuracy (%),Precision (%),Recall (%),F1 Score,Inference Time (ms),Notes
+YOLOv11n-FT (best_2),Original 13-class,85.1,91.5,92.0,0.9175,6.15,"mAP@0.5:0.95=0.851; max_det=20; conf=0.25, iou=0.5"
+CNN (ResNet18),GT Crops,91.84,93.01,92.3,0.924,0.408,cls-only on GT crops; 15 epochs; top-1=91.8%; macro metrics

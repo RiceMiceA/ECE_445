@@ -1,0 +1,13 @@
+train: train/images
+val: valid/images
+test: test/images
+
+nc: 13
+names: ['Apple', 'Banana', 'Bell Pepper', 'Broccoli', 'Carrot', 'Cauliflower', 'Courgette', 'Egg', 'Eggplant', 'Milk', 'Onion', 'Pasta', 'Tomato']
+
+roboflow:
+  workspace: tonys-workspace-nrwjn
+  project: ai-recipes-recommendation-atj08
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/tonys-workspace-nrwjn/ai-recipes-recommendation-atj08/dataset/1

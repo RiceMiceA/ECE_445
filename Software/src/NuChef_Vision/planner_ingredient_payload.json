@@ -1,0 +1,136 @@
+{
+  "source": "NuChef-Vision",
+  "frames_processed": 50,
+  "ingredients": [
+    {
+      "label": "Bell Pepper",
+      "confidence": 0.9855,
+      "bbox": {
+        "x": 240.9,
+        "y": 172.7,
+        "w": 186.5,
+        "h": 260.4
+      }
+    },
+    {
+      "label": "Pasta",
+      "confidence": 0.9851,
+      "bbox": {
+        "x": 234.1,
+        "y": 449.4,
+        "w": 129.3,
+        "h": 105.8
+      }
+    },
+    {
+      "label": "Eggplant",
+      "confidence": 0.9822,
+      "bbox": {
+        "x": 164.3,
+        "y": 410.0,
+        "w": 119.2,
+        "h": 216.9
+      }
+    },
+    {
+      "label": "Courgette",
+      "confidence": 0.9815,
+      "bbox": {
+        "x": 276.2,
+        "y": 211.6,
+        "w": 180.8,
+        "h": 305.6
+      }
+    },
+    {
+      "label": "Carrot",
+      "confidence": 0.9814,
+      "bbox": {
+        "x": 199.3,
+        "y": 349.7,
+        "w": 259.9,
+        "h": 290.3
+      }
+    },
+    {
+      "label": "Banana",
+      "confidence": 0.9813,
+      "bbox": {
+        "x": 177.6,
+        "y": 233.7,
+        "w": 159.2,
+        "h": 110.2
+      }
+    },
+    {
+      "label": "Apple",
+      "confidence": 0.9801,
+      "bbox": {
+        "x": 229.0,
+        "y": 232.0,
+        "w": 138.1,
+        "h": 224.6
+      }
+    },
+    {
+      "label": "Onion",
+      "confidence": 0.9765,
+      "bbox": {
+        "x": 105.8,
+        "y": 351.3,
+        "w": 192.0,
+        "h": 262.6
+      }
+    },
+    {
+      "label": "Milk",
+      "confidence": 0.9711,
+      "bbox": {
+        "x": 158.2,
+        "y": 262.4,
+        "w": 277.7,
+        "h": 366.8
+      }
+    },
+    {
+      "label": "Tomato",
+      "confidence": 0.9705,
+      "bbox": {
+        "x": 199.8,
+        "y": 154.3,
+        "w": 166.6,
+        "h": 206.4
+      }
+    },
+    {
+      "label": "Cauliflower",
+      "confidence": 0.9696,
+      "bbox": {
+        "x": 324.3,
+        "y": 171.7,
+        "w": 79.8,
+        "h": 153.4
+      }
+    },
+    {
+      "label": "Broccoli",
+      "confidence": 0.9634,
+      "bbox": {
+        "x": 68.5,
+        "y": 0.0,
+        "w": 243.2,
+        "h": 269.9
+      }
+    },
+    {
+      "label": "Egg",
+      "confidence": 0.96,
+      "bbox": {
+        "x": 207.2,
+        "y": 204.4,
+        "w": 70.1,
+        "h": 150.5
+      }
+    }
+  ]
+}

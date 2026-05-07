@@ -1,0 +1,26 @@
+train: train/images
+val: valid/images
+test: test/images
+nc: 14
+names:
+- Bell Pepper
+- Onion
+- Apple
+- Carrot
+- Egg
+- Tomato
+- Broccoli
+- Banana
+- Cauliflower
+- Courgette
+- Eggplant
+- Milk
+- Pasta
+- unknown
+roboflow:
+  workspace: tonys-workspace-nrwjn
+  project: ai-recipes-recommendation-atj08
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/tonys-workspace-nrwjn/ai-recipes-recommendation-atj08/dataset/1
+path: /home/tony/CS444/CS444/NuChef_1_1/filtered_dataset_core

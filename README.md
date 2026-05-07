@@ -1,7 +1,27 @@
-# ECE_445
-For Sp26 ECE445 Project - Griffin, Jackson, Tony
+# NuChef<sup>TM</sup> AI Culinary Assistant
 
-## 1. Init
+
+## Table of Contents
+1. [Final Product](#1-final-product)
+    - [Photos](#photos)
+    - [YouTube Demo](#youtube-demo)
+2. [How to use our repo?](#2-how-to-use-our-repo)
+    - [Init](#21-init)
+    - [Managing the submodule Unity folder](#22-managing-the-submodule-unity-folder)
+    - [Network Configuration](#3-network-configuration)
+    - [Troubleshooting](#4-troubleshooting)
+
+## 1. Final Product
+### Photos
+
+### YouTube Demo
+
+
+## 2. How to use our repo?
+
+
+
+### 2.1 Init
 #### Freshly Clone 1st time
 ```bash
 git clone --recurse-submodules <repo-url>
@@ -18,15 +38,15 @@ git submodule update --init --recursive
 ```
 
 
-## 2. Managing the submodule Unity folder
-### 2.1 Before Work/Update
+### 2.2 Managing the submodule Unity folder
+#### 2.2.1 Before Work/Update
 #### In parent folder
 ```bash
 git pull
 git submodule update --init --recursive
 ```
 
-### 2.2 Post-work
+#### 2.2.2 Post-work
 ```bash
 cd path/to/submodule
 git checkout main
@@ -71,10 +91,10 @@ Check the current ip address:
 When switching networks, update the backend IP (`192.168.x.x`) in these files:
 
 
-| File | Line | Variable |
-|------|------|----------|
-| [`Software/src/Unity-PassthroughCameraApiSamples/Assets/PassthroughCameraApiSamples/MultiObjectDetection/DetectionManager/Scripts/BackendClient.cs`](Software/src/Unity-PassthroughCameraApiSamples/Assets/PassthroughCameraApiSamples/MultiObjectDetection/DetectionManager/Scripts/BackendClient.cs#L19) | 19 | `m_baseUrl` |
-| [`Software/src/web_app/main/script.js`](Software/src/web_app/main/script.js#L6) | 6 | `BACKEND_URL` |
+| File                                                                                                                                                                                                                                                                                                       | Line | Variable      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | ------------- |
+| [`Software/src/Unity-PassthroughCameraApiSamples/Assets/PassthroughCameraApiSamples/MultiObjectDetection/DetectionManager/Scripts/BackendClient.cs`](Software/src/Unity-PassthroughCameraApiSamples/Assets/PassthroughCameraApiSamples/MultiObjectDetection/DetectionManager/Scripts/BackendClient.cs#L19) | 19   | `m_baseUrl`   |
+| [`Software/src/web_app/main/script.js`](Software/src/web_app/main/script.js#L6)                                                                                                                                                                                                                            | 6    | `BACKEND_URL` |
 
 > **Note:** The ESP32 now communicates via **BLE** (not WiFi), so it no longer needs an IP address or network config.
 
