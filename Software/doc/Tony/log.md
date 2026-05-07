@@ -2,6 +2,77 @@
 
 
 
+## Apr. 27th
+
+### Bug Fix — Confirmed Ingredient List (`DetectionManager.cs`)
+- **Root cause:** `ConfirmVisibleIngredients()` called `m_confirmedInstances.Clear()` on every A-press, wiping previously accumulated markers each time the user stamped a new spatial anchor.
+- **Fix:** Removed the `ConfirmVisibleIngredients` call from the A-press block entirely. The A-press now only calls `SpawnCurrentDetectedObjects()`. Ingredients remain candidates until the user presses **X**, at which point `RebuildConfirmedFromMarkers(m_spawnedEntities)` promotes the full accumulated marker list to confirmed in one shot.
+- The confirmed list is now the spatial marker list — it can never lose data between A-presses.
+
+---
+
+### Feature — Per-Instance Ingredient Weighing (full pipeline verified)
+Confirmed the end-to-end flow correctly tracks and measures every physical instance of an ingredient:
+
+1. **A-press (LiveScan)** — spawns a spatial marker for each bounding box not already covered; markers accumulate across multiple A-presses. Multiple eggs in different locations each get their own marker.
+2. **X-press** — `RebuildConfirmedFromMarkers` iterates every marker with no deduplication, building e.g. `["egg", "egg", "egg", "garlic"]`.
+3. **Y-press (IngredientReview phase)** — full list POSTed to `/ingredients_confirmed`; backend `_build_ingredient_instances` expands it into `egg_1 "egg 1/3"`, `egg_2 "egg 2/3"`, `egg_3 "egg 3/3"`, `garlic_1`.
+4. **`/ingredient_review` polling** — steps through each instance individually; `all_complete` only becomes `true` when every single instance has a recorded weight.
+
+---
+
+### Feature — AR Spatial Cues During Weigh-In (`IngredientReviewManager.cs`)
+Added highlight and arrow cues that point to the exact spatial marker being weighed as the user navigates between ingredient instances.
+
+**New Inspector fields:**
+- `DetectionManager m_detectionManager` — provides access to `SpawnedMarkers`.
+- `GameObject m_highlightPrefab` — assign `HighlightCuePrefab`; spawned in pulse mode.
+- `GameObject m_arrowPrefab` — assign `ArrowCuePrefab`; bounces above the target marker.
+
+**New private state:** `m_activeHighlight`, `m_activeArrow` — destroyed and recreated on every index change.
+
+**`ClearCues()`** — destroys active cue objects; called from `EndReview()` and before every `UpdateCues()` call.
+
+**`UpdateCues()`** — called at the end of every `UpdateHud()`. Iterates `SpawnedMarkers`, filters by `current.label`, picks the Nth match using `instance_index - 1` (backend is 1-based), then instantiates the highlight (pulse) and arrow on that marker's transform. Uses `GetComponentInChildren` to support nested prefab hierarchies.
+
+---
+
+### Feature — Recipe Complete Hides HUD (`RecipeGuidanceManager.cs`)
+Previously when `action == "complete"` arrived, `IsGuiding` was set to `false` but `ClearGuidance()` was never called, leaving the HUD panel and AR cues visible.
+
+**Fix:** Added `m_cueRenderer?.ClearCues()` and `m_hudController?.Hide()` directly in the `action == "complete"` branch of `ApplyStep()`, consistent with what `ClearGuidance()` already does on external stops.
+
+---
+
+### Feature — Confirmed Ingredient Count Display (`web_app/main/`)
+
+**`script.js`**
+- Replaced plain `renderList("confirmed-list", ...)` with a new `renderConfirmedList()` function.
+- Reads `ingredient_instances` (already present in `/state`) to display per-label counts and average measured weights: e.g. `egg ×3  58.2g avg`.
+- Falls back to `confirmed_ingredients` (plain unique labels) before X is pressed.
+
+**`style.css`**
+- Added `.ing-count` — accent-blue pill badge showing `×N` for any label with more than one instance.
+- Added `.ing-weight` — muted green text showing average measured weight once instances are weighed.
+
+---
+
+### Feature — Ingredient Count Context Sent to LLM (`backend.py`)
+Strengthened the `RECIPE_PLANNER_INSTRUCTIONS` prompt with an explicit description of `ingredient_summary`:
+- `count` = number of physical items the user detected and marked (e.g. `count=3` means 3 eggs).
+- `total_weight_g` / `average_weight_g` to scale seasoning correctly.
+- Instruction to mention count in `display_text` / `voice_text` for grab/move steps when `count > 1` (e.g. "Pick up all 3 eggs").
+
+---
+
+### Inspector Wiring Required (Unity Editor)
+On the `IngredientReviewManager` component, assign:
+- `m_detectionManager` → the scene `DetectionManager` GameObject
+- `m_highlightPrefab` → `HighlightCuePrefab` from `DetectionManager/Prefabs/`
+- `m_arrowPrefab` → `ArrowCuePrefab` from `DetectionManager/Prefabs/`
+
+---
+
 ## Apr. 26th
 ### Backend — `Software/src/web_app/backend.py` (1238 lines, heavily expanded)
 

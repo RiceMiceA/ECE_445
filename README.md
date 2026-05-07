@@ -142,3 +142,7 @@ asyncio.run(test())
 
 # State Machine
 $$ IDLE \rightarrow SCANNING \rightarrow INGREDIENTS_CONFIRMED \rightarrow RECIPE_READY \rightarrow DISPENSING_STEP \rightarrow USER_COOK_STEP \rightarrow COMPLETE $$
+
+
+## User Guideline (How to use NuChef)
+
