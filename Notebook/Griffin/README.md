@@ -18,7 +18,7 @@ Febuary 9th
 Objective: Discuss additional hardware complexity.
 Record of what was done: Settled on adding IR sensor for spice level detection. Two options for this. One, smoke detector style break beam detector. Two, IR time of flight sensor. Decided on IR Time of Flight for higher precision vs the digital high/low supplied by break beam style. Drew this image to explain how it worked to my groupmates.
 
-![In The Workshop](../Images/79236442504__7CD3825E-1CEB-405F-BD5A-CF5BF4BBF05C.HEIC)
+![IR_Diagram](../Images/79236442504__7CD3825E-1CEB-405F-BD5A-CF5BF4BBF05C.HEIC)
 
 Febuary 11th
 
@@ -42,4 +42,9 @@ Febuary 20th
 
 Objective: Start PCB schematic work.
 Record of what was done: Have past PCB design experience, able to copy over microcontroller schematic, usbc port schematic, and voltage regulation schematic from prior project. Will need to migrate ESP32 C3-Mini to ESP32 S3-Wroom for more GPIO pins though. Attached are the copied schematics.
+
+![Microcontroller](../Images/microcontroller_v1)
+![Voltage_Regulator](../Images/voltage_reg_V1)
+![USB C](../Images/USBC_V1)
+
 
