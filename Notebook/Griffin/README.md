@@ -70,7 +70,7 @@ March 3rd
 Objective: Routing
 Record: Assigned footprints, routed full board. Settled on 0805 resistors and capacitors as a good balance between size and solderability. Found these cool screw hole terminals for all the wires from Pheonix Connect. Useful because we can remove and insert wires without soldering, which will be nice for testing. Went with max size of 100x100 mm just for ease. Included mounting holes. Did via stitching for the first time.
 
-![Routing](..Image/Routing.png)
+![Routing](..Images/Routing.png)
 
 March 8th
 
