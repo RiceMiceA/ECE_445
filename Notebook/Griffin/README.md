@@ -102,7 +102,14 @@ Record: Started well. Got microcontroller on. Pivoted to power circuitry. Put on
 April 14th
 
 Objective: Get Power
-Record: Put new voltage regulator on. No power. Do a lot of probing that reveals issue. First checked resistance between 3.3V net and ground, and it is resonably high, so there is no short. Then checked resistance between pins of voltage regulator and also found no short. Seems issue was again that I had broken a pin or in some way damaged the voltage regulator. Fix is to put a new voltage regulator on.
+Record: Put new voltage regulator on. No power. Do a lot of probing that reveals issue. First checked resistance between 3.3V net and ground, and it is resonably high, so there is no short. Then checked resistance between pins of voltage regulator and also found no short. Seems issue was again that I had broken a pin or in some way damaged the voltage regulator. Fix is to put a new voltage regulator on. Accidently ripped USB C port off, will need to put a new one on.
+
+![Testing Power](../Images/IMG_9632.JPG)
+
+April 15th: Get Power
+Record: Put new voltage regulator on and immediatly got 3.3V, which was good. Put on a new USB-C port on, along with the boot and reset buttons to try flashing. Powered up, put in boot mode, and was able to flash! Now just need peripherals.
+
+
 
 
 
