@@ -94,7 +94,8 @@ April 5th
 Objective: Get load cell working and motors driven by new driver.
 Record: Easy swap to new motor drivers. Worked right away. Jackson got load cell working after I left.
 
-
+![Motor Driver Breadboard](../Images/IMG_9604.png)
+![Load Cell Breadboard](../Images/IMG_9604.png)
 
 April 12th
 
@@ -119,6 +120,34 @@ Objective: Test peripherals
 Record: First time testing again have no power. This time I probe 3.3V and have an obvious short. Resistance is super low (like sub 1 ohm at places). Off initial visual inspection I guess the issue may be one or both of the LEDs, so I remove both, but this does not fix the issue. Then, using the micrometer, I identify the probe to be a short between pins on the HX711. I remove this and it fixes the short. 
 
 After flashing the motor code, the motors will not run. Probing the motor controllers, I find that all of them have a short between all of the four input lines. This makes sense, as in the design, all 3 drivers share the same input lines, and the motor that is controlled is only toggled by each motor drivers sleep mode (awakening one motor driver at a time). By visual inspection (and by probing which has the lowest resistance), I was able to identify the middle motor driver as the cause of the short. After removing, other two motors are able to be controlled. Leave it at this for now.
+
+April 20th
+
+Objective: Put parts back on that I removed
+Results: Soldered back on missing parts, did not check if they worked.
+
+April 21st: Validate soldering
+Results: All motors worked fine. Load Cell was weird to get working, as wires were hard to get good contact with, but got it going eventually.
+
+April 24th
+
+Objective: Figure out IR Sensors
+Results: Unable to be communicated with. After some probing, find there are many shorts with the hidden pins of the IR sensor module. Abandon ship and order presoldered bare IR sensor.
+
+April 27th
+
+Objective: Get new IR sensors working
+Results: After solder wires onto one of the modules, we get good readings in free space. That is, when testing it pointed at near objects such as the table, the readings given are pretty realistic. However, once put inside housing, readings are nonsense. Getting readings that increase in distacnce as spice level gets higher, vastly different readings for each of the 3 spice containers, and drifting calibration. Abandon for demo.
+
+April 28th
+
+Objective: Fix IR Sensor for final 10
+Results: Identify IR Sensor issue is that IR cone is interacting with walls of containers before it interacts with spice. This was giving the nonsense readings. 3D print new spice containers that are larger than the cone width at bottom using 
+
+cone diameter ≈ 2 × distance × tan(25° / 2)
+=2 x 100mm * tan(12.5) = 44mm
+
+So I made the container have 50mm square sides. This would ensure the IR sensor would only read the spice level. These printed over night.
 
 
 
