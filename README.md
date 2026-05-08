@@ -10,6 +10,7 @@
     - [Managing the submodule Unity folder](#22-managing-the-submodule-unity-folder)
     - [Network Configuration](#3-network-configuration)
     - [Troubleshooting](#4-troubleshooting)
+5. [Third-Party Libraries & Licenses](#5-third-party-libraries--licenses)
 
 ## 1. Final Product
 ### Photos
@@ -105,7 +106,7 @@ When switching networks, update the backend IP (`192.168.x.x`) in these files:
 Then start the backend and BLE bridge:
 ```bash
 # Terminal 1 — backend
-export OPENAI_API_KEY="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"
+export OPENAI_API_KEY="YOUR_OPENAI_API_KEY_HERE"
 export OPENAI_MODEL="gpt-5.4"
 export USE_LLM_PLANNER=1
 uvicorn backend:app --host 0.0.0.0 --port 8000 --reload
@@ -163,5 +164,23 @@ async def test():
 asyncio.run(test())
 "
 ```
+
+## 5. Third-Party Libraries & Licenses
+
+### Unity Utility Packages (MIT)
+- **Repository:** https://github.com/meta-quest/Unity-UtilityPackages
+- **Author:** Meta Platforms, Inc. and affiliates
+- **License:** MIT License
+
+> Meta Quest, "Unity-UtilityPackages," GitHub. [Online]. Available: https://github.com/meta-quest/Unity-UtilityPackages. [Accessed: May 7, 2026].
+
+MIT License attribution:
+```
+Unity Utility Packages
+Copyright (c) Meta Platforms, Inc. and affiliates.
+Licensed under the MIT License.
+https://github.com/meta-quest/Unity-UtilityPackages
+```
+
 
 

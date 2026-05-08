@@ -10,6 +10,7 @@
 - [Mar. 28th](#mar-28th)
 - [Feb. 15th](#feb-15th)
 - [Jan. 25th](#jan-25th)
+- [References](#references)
 
 ---
 
@@ -88,7 +89,7 @@ On the `IngredientReviewManager` component, assign:
 ### Backend — `Software/src/web_app/backend.py` (1238 lines, heavily expanded)
 
 **LLM Recipe Planner (replaces mock placeholder)**
-- `_generate_llm_recipe()` calls the OpenAI Responses API with a strict JSON schema (`RECIPE_PLAN_SCHEMA`) and a `RECIPE_PLANNER_INSTRUCTIONS` system prompt.
+- `_generate_llm_recipe()` calls the OpenAI Responses API \[10\] with a strict JSON schema (`RECIPE_PLAN_SCHEMA`) and a `RECIPE_PLANNER_INSTRUCTIONS` system prompt.
 - Pydantic models `RecipePlan`, `RecipeStep`, `DispenseSpec`, `SelectorTarget` validate LLM output before any state change.
 - `_postprocess_recipe_plan()` normalizes + sanitizes the LLM result; falls back to mock on any failure.
 - Controlled by env vars: `USE_LLM_PLANNER=1`, `OPENAI_API_KEY`, `OPENAI_MODEL`. Auto-loads a `.env` file.
@@ -113,14 +114,14 @@ On the `IngredientReviewManager` component, assign:
 
 ---
 
-### ESP32 Firmware — `Software/src/esp_driver/src/main.cpp` (complete rewrite to BLE)
+### ESP32 Firmware \[8\] — `Software/src/esp_driver/src/main.cpp` (complete rewrite to BLE)
 - Was: WiFi HTTP polling loop (`HTTPClient`).
 - Now: BLE GATT peripheral advertising as `"NuChef-Dispenser"` with a custom GATT service.
 - Three GATT characteristics:
   - `CMD_CHAR` (Write) — receives dispense commands as JSON
   - `RSLT_CHAR` (Notify) — sends `command_result` JSON back
   - `WT_CHAR` (Notify) — sends periodic weight heartbeats
-- Motor wiring changed to TB6612 + FULL4WIRE steppers; all 3 motors share 4 coil-drive pins, selected by individual ENABLE lines.
+- Motor wiring changed to TB6612 + FULL4WIRE steppers \[11\]; all 3 motors share 4 coil-drive pins, selected by individual ENABLE lines.
 
 ---
 
@@ -213,7 +214,7 @@ On the `IngredientReviewManager` component, assign:
 - Full endpoint reference table
 
 ### Backend — `Software/src/web_app/backend.py`
-- Built full FastAPI state-machine orchestrator from scratch
+- Built full FastAPI \[7\] state-machine orchestrator from scratch
 - `system_state` dict as single source of truth (`demo_state`, ingredients, recipe, steps, dispense status, weight, containers)
 - All endpoints implemented: `/state`, `/reset`, `/candidate_ingredients`, `/ingredients_confirmed`, `/generate_recipe`, `/current_step`, `/advance_step`, `/dispense_step`, `/pending_command`, `/command_result`, `/status_update`, `/set_containers`, `/manual_override`, `/manual_dispense`
 - Mock recipe generator placeholder (`_generate_mock_recipe`) — swap for LLM call later
@@ -223,10 +224,10 @@ On the `IngredientReviewManager` component, assign:
 - `script.js` — polls `/state` every 2s; all button actions wired; renders live state badge, step list, container level bars, load cell weight, pending ESP32 command
 - `style.css` — dark theme, state-colored badges, step progress visualization
 
-### ESP32 Firmware — `Software/src/esp_driver/src/main.cpp`
+### ESP32 Firmware \[8\] — `Software/src/esp_driver/src/main.cpp`
 - Full rewrite from passive `WebServer` → active `HTTPClient` polling loop
 - Polls `GET /pending_command` every 1s; runs closed-loop dispense; POSTs to `/command_result`
-- HX711 load cell tared on boot; ±0.2g tolerance, 15s timeout
+- HX711 \[9\] load cell tared on boot; ±0.2g tolerance, 15s timeout
 - 3 motors in `AccelStepper::DRIVER` (step/dir) mode, indexed by `container_index`
 - `TEST_MOTOR_INDEX` constant: set `0/1/2` for single-motor testing, `-1` for production
 - `platformio.ini`: added `HX711` + `ArduinoJson`, removed TB6612
@@ -237,7 +238,7 @@ On the `IngredientReviewManager` component, assign:
 - `BackendClient.cs` — all HTTP traffic via `UnityWebRequest` coroutines; configurable `m_baseUrl`
 
 ### Unity — Modified Files
-- `SentisInferenceRunManager.cs` — `m_detections` → `List<DetectionResult>`; NMS preserves score + class name; calls `m_ingredientInventory.UpdateCandidates()` each inference frame
+- `SentisInferenceRunManager.cs` (Unity Sentis \[6\]) — `m_detections` → `List<DetectionResult>`; NMS preserves score + class name; calls `m_ingredientInventory.UpdateCandidates()` each inference frame
 - `SentisInferenceUiManager.cs` — added `DrawUIBoxes(List<DetectionResult>...)` overload; existing rendering untouched
 - `DetectionManager.cs` — added `m_ingredientInventory` + `m_backendClient` references; A button confirms ingredients + triggers recipe generation; B button also clears inventory
 
@@ -263,15 +264,15 @@ On the `IngredientReviewManager` component, assign:
 
 ### Objective
 
-Define a practical comparison workflow for the project vision subsystem. The project goal is to recognize available ingredients from headset camera imagery, produce a structured ingredient list, and feed that list into recipe generation and AR guidance. The proposal allowed YOLOv8/YOLO11 or FastSAM for candidate regions, followed by CLIP-style classification if needed.
+Define a practical comparison workflow for the project vision subsystem. The project goal is to recognize available ingredients from headset camera imagery, produce a structured ingredient list, and feed that list into recipe generation and AR guidance. The proposal allowed YOLOv8/YOLO11 \[1\]\[2\] or FastSAM \[3\] for candidate regions, followed by CLIP-style classification \[4\] if needed.
 
 ### Record of work
 
 - Decided that YOLO should be the first working baseline because it gives both localization and class labels in one pass.
 - Framed the notebook as a vision model bakeoff rather than a single training script.
 - Selected the comparison candidates:
-  1. YOLOv11 pretrained baseline.
-  2. YOLOv11 fine-tuned on the ingredient dataset.
+  1. YOLOv11 pretrained baseline \[1\]\[2\].
+  2. YOLOv11 fine-tuned on the ingredient dataset \[5\].
   3. CNN crop classifier baseline trained on ground-truth crops.
   4. Tracking plus temporal smoothing to reduce repeated detector computation.
 - Defined the goal of the notebook output as a concise performance table comparing accuracy, precision, recall, F1, and inference time.
@@ -303,7 +304,7 @@ Create a reusable Jupyter notebook scaffold that can run locally or in Colab and
 - Imported `os`, `time`, `math`, `random`, `shutil`, `dataclasses`, `pathlib`, `typing`, `numpy`, `pandas`, `yaml`, `cv2`, and `torch`.
 - Set a fixed random seed, `SEED = 445`, for reproducibility.
 - Added a CUDA/PyTorch diagnostic cell to report whether GPU acceleration is available.
-- Added configuration variables:
+- Added configuration variables (dataset: Roboflow AI Recipes Recommendation \[5\]):
   - `DATA_YAML = os.getenv("NUCHEF_DATA_YAML", "data/data.yaml")`
   - `YOLO_BASE_WEIGHTS = os.getenv("NUCHEF_YOLO_BASE", "yolo11n.pt")`
   - `YOLO_FT_WEIGHTS = os.getenv("NUCHEF_YOLO_FT", "PATH/TO/best.pt")`
@@ -379,7 +380,7 @@ Fine-tune a YOLOv11 detector on the ingredient dataset and save the best checkpo
 
 ### Record of work
 
-- Imported `YOLO` from `ultralytics`.
+- Imported `YOLO` from `ultralytics` \[2\].
 - Defined `RUNS_DIR` so training artifacts are saved inside the current project folder.
 - Implemented `train_yolo_ultralytics(weights, data_yaml, task, epochs, imgsz, batch, device, project, name)`.
 - Configured training with:
@@ -606,8 +607,8 @@ Connect the bakeoff results to the eventual AR cooking guidance system.
 <p align="center"><img src="Screenshot from 2026-04-26 15-55-10.png" width="600"/></p>
 ### Record of work
 
-- Kept the model choice aligned with the final Quest/Unity Sentis workflow.
-- The later Unity code uses YOLO detections with class ids, class names, scores, and bounding boxes.
+- Kept the model choice aligned with the final Quest/Unity Sentis \[6\] workflow.
+- The later Unity code uses YOLO detections with class ids, class names, scores, and bounding boxes \[1\].
 - The project direction moved toward stable candidate ingredient tracking, user confirmation, backend recipe generation, and AR step guidance.
 
 ### Decisions and rationale
@@ -634,10 +635,10 @@ Define the high-level system architecture for NuChef before implementation begin
 
 The NuChef system is divided into four interacting subsystems:
 
-- **Meta Quest 3 / Unity AR UI** — captures RGB frames from the passthrough camera, runs local YOLO inference, lets the user confirm detected ingredients, and renders step-by-step AR guidance overlays.
-- **FastAPI backend** — central state machine and recipe planner. Owns the cooking session lifecycle, validates events from Quest and ESP32, calls the LLM recipe planner, and exposes a web dashboard for manual control.
+- **Meta Quest 3 / Unity AR UI** \[12\]\[13\] — captures RGB frames from the passthrough camera \[14\], runs local YOLO inference \[1\], lets the user confirm detected ingredients, and renders step-by-step AR guidance overlays.
+- **FastAPI backend** \[7\] — central state machine and recipe planner. Owns the cooking session lifecycle, validates events from Quest and ESP32 \[8\], calls the LLM recipe planner \[10\], and exposes a web dashboard for manual control.
 - **BLE bridge** — a lightweight Python relay (`bleak` + `httpx`) running on the host laptop. Polls the backend for pending dispense commands and forwards them to the ESP32 over BLE; relays ESP32 weight/result notifications back to the backend.
-- **ESP32 dispenser module** — BLE GATT peripheral with HX711 load cell and three stepper motors. Receives dispense commands, runs closed-loop weight control, and notifies the bridge when done.
+- **ESP32 dispenser module** \[8\] — BLE GATT peripheral with HX711 load cell \[9\] and three stepper motors \[11\]. Receives dispense commands, runs closed-loop weight control, and notifies the bridge when done.
 
 #### B. Design decisions
 
@@ -711,3 +712,33 @@ State definitions:
 - Detection output must be structured (`class`, `confidence`, `bounding box`) so the recipe planner and AR cue system can consume it directly without ambiguity.
 
 ---
+
+# References
+
+\[1\] J. Redmon, S. Divvala, R. Girshick, and A. Farhadi, "You Only Look Once: Unified, Real-Time Object Detection," *arXiv preprint arXiv:1506.02640*, 2015. [Online]. Available: https://arxiv.org/abs/1506.02640
+
+\[2\] Ultralytics, "YOLOv8 Documentation," [Online]. Available: https://docs.ultralytics.com/. [Accessed: Feb. 13, 2026].
+
+\[3\] A. Kirillov et al., "Segment Anything," in *Proc. IEEE/CVF Int. Conf. Computer Vision*, 2023, pp. 4015–4026. [Online]. Available: https://arxiv.org/abs/2304.02643
+
+\[4\] A. Radford et al., "Learning Transferable Visual Models From Natural Language Supervision," in *Proc. 38th Int. Conf. Machine Learning*, 2021, pp. 8748–8763. [Online]. Available: https://proceedings.mlr.press/v139/radford21a.html
+
+\[5\] AI Recipes Recommendations, "AI Recipes Recommendation Dataset," Roboflow Universe. [Online]. Available: https://universe.roboflow.com/ai-recipes-recommendations/ai-recipes-recommendation. [Accessed: Feb. 13, 2026].
+
+\[6\] Unity Technologies, "Unity Sentis: AI Inference Engine," [Online]. Available: https://docs.unity3d.com/Packages/com.unity.sentis. [Accessed: Feb. 13, 2026].
+
+\[7\] FastAPI, "FastAPI Documentation," [Online]. Available: https://fastapi.tiangolo.com/. [Accessed: Feb. 13, 2026].
+
+\[8\] Espressif Systems, *ESP32 Technical Reference Manual*. [Online]. Available: https://www.espressif.com/. [Accessed: Feb. 13, 2026].
+
+\[9\] Avia Semiconductor, *HX711: 24-Bit ADC for Weigh Scales Datasheet*. [Online]. Available: https://cdn.sparkfun.com/datasheets/Sensors/ForceFlex/hx711_english.pdf. [Accessed: Feb. 13, 2026].
+
+\[10\] OpenAI, "GPT Models API Documentation," [Online]. Available: https://platform.openai.com/docs. [Accessed: Feb. 13, 2026].
+
+\[11\] StepperOnline, *17HE15-1504S Full Datasheet*. [Online]. Available: https://www.artme-3d.de/wp-content/uploads/2024/03/17HE15-1504S.pdf. [Accessed: Mar. 11, 2026].
+
+\[12\] Meta Platforms, Inc., "Meta Quest Developer Documentation," Meta Horizon OS Developers. [Online]. Available: https://developers.meta.com/horizon/. [Accessed: Feb. 13, 2026].
+
+\[13\] Meta Platforms, Inc., "Unity Passthrough Camera API Samples," GitHub. [Online]. Available: https://github.com/oculus-samples/Unity-PassthroughCameraApiSamples. [Accessed: Feb. 13, 2026].
+
+\[14\] Meta Platforms, Inc., "Passthrough Window Tutorial," Meta Horizon OS Developers. [Online]. Available: https://developers.meta.com/horizon/documentation/unity/unity-passthrough-tutorial-passthrough-window/. [Accessed: Feb. 13, 2026].
