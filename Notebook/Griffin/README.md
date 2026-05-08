@@ -149,6 +149,13 @@ cone diameter ≈ 2 × distance × tan(25° / 2)
 
 So I made the container have 50mm square sides. This would ensure the IR sensor would only read the spice level. These printed over night.
 
+![Spice Container](..Images/Spice Container)
+
+April 29th
+
+Objective: IR Sensor final testing
+Results: After glueing on the IR sensors, we were able to calibrate using what we deemed to be fully filled and empty. We then ran all of our validation tests. For the IR sensors we found 1.6% error based off the mass percentage.
+
 
 
 
