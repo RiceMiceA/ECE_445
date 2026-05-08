@@ -106,9 +106,8 @@ When switching networks, update the backend IP (`192.168.x.x`) in these files:
 Then start the backend and BLE bridge:
 ```bash
 # Terminal 1 — backend
-export OPENAI_API_KEY="YOUR_OPENAI_API_KEY_HERE"
-export OPENAI_MODEL="gpt-5.4"
-export USE_LLM_PLANNER=1
+cd Software/src/web_app
+source .env   # loads OPENAI_API_KEY, OPENAI_MODEL, USE_LLM_PLANNER from .env file
 uvicorn backend:app --host 0.0.0.0 --port 8000 --reload
 
 # Terminal 2 — BLE bridge (connects to ESP32 over Bluetooth, forwards to backend)
