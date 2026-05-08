@@ -8,6 +8,8 @@ Febuary 4th
 Objective: Figure out the physical design of what we want to make, and whether we want to use the machine shop.
 Record of what was done: We discussed the physical design for a while. We discussed different ways of making a lazy susan design. Options include rotating the spice dispenser using ball berrings and a central motor, or rotating the cup to be dispensed to to the spice dispensers themselves. Pros of rotating the spice containers include increased visual appeal, less total motors, and simpler fittings for aligning spices (only need one funnel/dispensing shoot). Pros of rotating the cup include ease of design and less moving parts.
 
+Furthermore, we discussed how we would actually dispense the spice. We discussed ideas of using gears to create linear motion, or some sort of rotating wheel with a pass through that would allow spice to go through when lined up.
+
 ![Whiteboard](../Images/IMG_6784.jpeg)
 
 Febuary 5th
