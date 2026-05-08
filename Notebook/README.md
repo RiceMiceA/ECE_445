@@ -18,6 +18,5 @@ The appliance also includes a circular seasoning dispenser driven by stepper mot
 
 ## Visual Aid
 
-**Figure 1. High-Level Abstraction of the Project Pipeline**
-
 ![High Level Abstraction of The Project Pipeline](<Visual Aid.png>)
+**Figure 1. High-Level Abstraction of the Project Pipeline**
