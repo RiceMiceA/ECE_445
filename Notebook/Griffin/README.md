@@ -121,7 +121,7 @@ Record: First time testing again have no power. This time I probe 3.3V and have 
 
 After flashing the motor code, the motors will not run. Probing the motor controllers, I find that all of them have a short between all of the four input lines. This makes sense, as in the design, all 3 drivers share the same input lines, and the motor that is controlled is only toggled by each motor drivers sleep mode (awakening one motor driver at a time). By visual inspection (and by probing which has the lowest resistance), I was able to identify the middle motor driver as the cause of the short. After removing, other two motors are able to be controlled. Leave it at this for now.
 
-![Pre Testing](../Images/IMG_7064.jpeg
+![Pre Testing](../Images/IMG_7064.jpeg)
 
 April 20th
 
