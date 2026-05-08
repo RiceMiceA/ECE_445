@@ -41,10 +41,24 @@ Record: Took delivery of load cell and stepper motors. Delivered to Machine Shop
 Febuary 20th
 
 Objective: Start PCB schematic work.
-Record of what was done: Have past PCB design experience, able to copy over microcontroller schematic, usbc port schematic, and voltage regulation schematic from prior project. Will need to migrate ESP32 C3-Mini to ESP32 S3-Wroom for more GPIO pins though. Attached are the copied schematics.
+Record of what was done: Have past PCB design experience, able to copy over microcontroller schematic, usbc port schematic, and voltage regulation schematic from prior project. AP2112 linear dropuot regulators a fine choice. Dropout will likely not be a problem as sensors are low current. Will need to figure out how to run higher current motors. Perhaps seperate battery pack. Will need to migrate ESP32 C3-Mini to ESP32 S3-Wroom for more GPIO pins though. Would have liked to reuse battery charging module, but the previously used MCP73871 looks hard to hand solder. Will need to look for an easier to solder version, perhaps in an SOT format. Attached are the copied schematics.
 
 ![Microcontroller](../Images/microcontroller_v1)
 ![Voltage_Regulator](../Images/voltage_reg_V1)
 ![USB C](../Images/USBC_V1)
 
+Febuary 24th
 
+Objective: Finish Schematic
+Record of what was done. Made rest of schematic decisions. Found MCP73831 battery charger unit. Major drawbacks from MCP73871 include inability to power system from USB and much smaller max charging speed. Huge benefit is SOT-23 format instead of QFN format with hidden pins. Good option for this type of project. 
+
+Found DRV8833 motor drivers. Not technically a stepper motor driver, but rather dual H-Bridge, but capable of driving stepper motor at low voltages. This works here, as motors will be driven by 3.7V Lithium Ion battery.
+
+Downsides of DRV8833 that are not relevent here
+-Heats up more during continuous use (We will disable drivers when not in use)
+-Can't handle higher voltages (We only have 3.7V available)
+-Less Smooth/Precise (We only need to be able to do 180 degree rotations, so this lower precisions should not be an issue)
+
+Benefit is simpler implementation and smaller footprint.
+
+For load cell, HX711 differential analog to digital converter is used. This comes with load cells, but for integration (and class) purposes, we will build into our PCB. Used simpler wiring method that does not use the internal regulated analog supply. Our power rail should not be too noisy, and there are plenty of decoupling capacitors, and relatively low load demands on it, so this should be sufficient for getting resonably accurate readings. We won't be using the motor and load cell at the same time anyways, which would be the only thing that could pull the power supply low.
