@@ -94,6 +94,8 @@ April 5th
 Objective: Get load cell working and motors driven by new driver.
 Record: Easy swap to new motor drivers. Worked right away. Jackson got load cell working after I left.
 
+
+
 April 12th
 
 Objective: Start soldering
@@ -107,7 +109,20 @@ Record: Put new voltage regulator on. No power. Do a lot of probing that reveals
 ![Testing Power](../Images/IMG_9632.JPG)
 
 April 15th: Get Power
-Record: Put new voltage regulator on and immediatly got 3.3V, which was good. Put on a new USB-C port on, along with the boot and reset buttons to try flashing. Powered up, put in boot mode, and was able to flash! Now just need peripherals.
+Record: Put new voltage regulator on and immediatly got 3.3V, which was good. Put on a new USB-C port on, along with the boot and reset buttons to try flashing. Powered up, put in boot mode, and was able to flash! Weirdly serial monitor was not working. I flashed simple hello world code, and nothing got printed to serial. Not sure where this issue came from as am able to flash fine, so clearly communication is working fine. Maybe just a code error. Not going to look into it right now. Soldered the rest of the board, but was too tired to rest anything.
+
+![First Time Flashing](../Images/79797010127__E826DF62-E476-4189-B64B-733E1AC5B325.HEIC)
+
+April 18th
+
+Objective: Test peripherals
+Record: First time testing again have no power. This time I probe 3.3V and have an obvious short. Resistance is super low (like sub 1 ohm at places). Off initial visual inspection I guess the issue may be one or both of the LEDs, so I remove both, but this does not fix the issue. Then, using the micrometer, I identify the probe to be a short between pins on the HX711. I remove this and it fixes the short. 
+
+After flashing the motor code, the motors will not run. Probing the motor controllers, I find that all of them have a short between all of the four input lines. This makes sense, as in the design, all 3 drivers share the same input lines, and the motor that is controlled is only toggled by each motor drivers sleep mode (awakening one motor driver at a time). By visual inspection (and by probing which has the lowest resistance), I was able to identify the middle motor driver as the cause of the short. After removing, other two motors are able to be controlled. Leave it at this for now.
+
+
+
+
 
 
 
