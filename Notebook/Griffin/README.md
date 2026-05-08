@@ -72,4 +72,38 @@ Record: Assigned footprints, routed full board. Settled on 0805 resistors and ca
 
 ![Routing](..Image/Routing)
 
+March 8th
+
+Objective: Control stepper motor with microcontroller for breadboard demo
+Record of what was done: We spent the first couple hours trying to communicate with an old ESP32 Wroom breakout module I had. We tried a bunch of things including putting the board in boot mode, powering it from a digital power supply, from battery, probing all the power lines, probing the breadboard for shorts, etc. Turns out our USB micro cable was broken. We swapped to a new cable and were able to communicate. We then wired a motor driver we got off Amazon. Turns out the part we got (TB6612FNG) was just two H bridges for DC motors, and was not designed for continuous current, and was burning up really quick, so we had to keep unplugging it. Still, we were able to spin our motors for the first time. 
+
+We ordered some breakout boards for the actual parts we will use on the PCB, including a DRV8833 breakout board and an ESP32 S3 Wroom breakout board. That way we can verify everything will work for the final board.
+
+March 12th
+
+Objective: Submit PCB order for round 3
+Record: Submitted order Thursday evening but was still able to be included in PCB round 3 order. 
+
+March 28th
+
+Objective: Get Load Cell working
+Record: Amplifier which came with load cell was broken. Ordered a new HX711 breakout board. Also placed order for all of the PCB parts. Some were in stock with the school, some were ordered through digikey. HX711 was out of stock a lot of places for some reason so had to order through LCSC which cost a lot in shipping. PCBs came in this day as well.
+
+April 5th
+
+Objective: Get load cell working and motors driven by new driver.
+Record: Easy swap to new motor drivers. Worked right away. Jackson got load cell working after I left.
+
+April 12th
+
+Objective: Start soldering
+Record: Started well. Got microcontroller on. Pivoted to power circuitry. Put on two SOT-23 parts in battery charger and voltage regulator. Ended up with large bridge on voltage regulator. Accidently broke a pin off trying to remove bridge. We only had one of these chips so had to rush order new ones to put on. Nothing else to test until new chips come in as need regulated voltage for whole system.
+
+April 14th
+
+Objective: Get Power
+Record: Put new voltage regulator on. No power. Do a lot of probing that reveals issue. First checked resistance between 3.3V net and ground, and it is resonably high, so there is no short. Then checked resistance between pins of voltage regulator and also found no short. Seems issue was again that I had broken a pin or in some way damaged the voltage regulator. Fix is to put a new voltage regulator on.
+
+
+
 
