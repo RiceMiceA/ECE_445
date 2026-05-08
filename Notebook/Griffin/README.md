@@ -63,14 +63,14 @@ Benefit is simpler implementation and smaller footprint.
 
 For load cell, HX711 differential analog to digital converter is used. This comes with load cells, but for integration (and class) purposes, we will build into our PCB. Used simpler wiring method that does not use the internal regulated analog supply. Our power rail should not be too noisy, and there are plenty of decoupling capacitors, and relatively low load demands on it, so this should be sufficient for getting resonably accurate readings. We won't be using the motor and load cell at the same time anyways, which would be the only thing that could pull the power supply low.
 
-![Schematic](../Image/schematic)
+![Schematic](../Image/schematic.png)
 
 March 3rd
 
 Objective: Routing
 Record: Assigned footprints, routed full board. Settled on 0805 resistors and capacitors as a good balance between size and solderability. Found these cool screw hole terminals for all the wires from Pheonix Connect. Useful because we can remove and insert wires without soldering, which will be nice for testing. Went with max size of 100x100 mm just for ease. Included mounting holes. Did via stitching for the first time.
 
-![Routing](..Image/Routing)
+![Routing](..Image/Routing.png)
 
 March 8th
 
