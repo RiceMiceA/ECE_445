@@ -123,7 +123,7 @@ After flashing the motor code, the motors will not run. Probing the motor contro
 
 ![Pre Testing](../Images/IMG_7064.jpeg)
 
-April 20th
+April 20th 
 
 Objective: Put parts back on that I removed
 Results: Soldered back on missing parts, did not check if they worked.
