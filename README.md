@@ -14,8 +14,8 @@
 
 ## 1. Final Product
 ### Photos
-![alt text](Software/src/images/Images-20260507T234808Z-3-001/Images/IMG_7206.png)
-![alt text](Software/src/images/Images-20260507T234808Z-3-001/Images/IMG_9755.png)
+![alt text](Notebook/Images/IMG_7206.png)
+![alt text](Notebook/Images/IMG_9755.png)
 
 
 
