@@ -156,7 +156,7 @@ April 29th
 Objective: IR Sensor final testing
 Results: After glueing on the IR sensors, we were able to calibrate using what we deemed to be fully filled and empty. We then ran all of our validation tests. For the IR sensors we found 1.6% error based off the mass percentage. We also did the motor spin test to find the drift and found it to be under 1% from intended full rotation. We validated the load cell comparing it to readings from a profesional scale and found the average error to  be under 1 gram. While we were doing this we were taking battery measurements and confirmed the battery was charging.
 
-![Battery Percentage](../Images/Battery Perf.png)
+![Battery Percentage](../Images/Battery_Perf.png)
 ![IR Sensor Table](../Images/IR_Sensor_Table.png)
 ![Load Cell Table](../Images/Load_Cell_Table_2.png)
 ![Motor Graph](../Images/motor_graph_2.png)
