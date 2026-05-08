@@ -1,4 +1,4 @@
-# NuChef<sup>TM</sup> AI Culinary Assistant
+# NuChef<sup>TM</sup> - AI Culinary Assistant
 
 
 ## Table of Contents
@@ -13,9 +13,13 @@
 
 ## 1. Final Product
 ### Photos
+![alt text](Software/src/images/Images-20260507T234808Z-3-001/Images/IMG_7206.png)
+![alt text](Software/src/images/Images-20260507T234808Z-3-001/Images/IMG_9755.png)
+
+
 
 ### YouTube Demo
-
+[![NuChef Demo](https://img.youtube.com/vi/w1jBzbUWaAI/maxresdefault.jpg)](https://www.youtube.com/watch?v=w1jBzbUWaAI)
 
 ## 2. How to use our repo?
 
